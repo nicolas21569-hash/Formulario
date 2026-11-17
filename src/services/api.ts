@@ -1,4 +1,4 @@
-import { DEFAULT_PAGE_CONFIG, INTERVIEW_SECTIONS } from '../data/interviewSchema';
+import { DEFAULT_PAGE_CONFIG, DEFAULT_SIDEBAR_TABS, INTERVIEW_SECTIONS } from '../data/interviewSchema';
 import {
   AIAnalysisReport,
   Company,
@@ -20,9 +20,18 @@ export const EMPTY_WORKSPACE: WorkspaceData = {
   customTargets: {},
   interviewSections: INTERVIEW_SECTIONS,
   pageConfig: DEFAULT_PAGE_CONFIG,
+  customTabContents: {},
 };
 
 function normalizeWorkspace(data: WorkspaceData): WorkspaceData {
+  const mergedPageConfig = {
+    ...DEFAULT_PAGE_CONFIG,
+    ...(data.pageConfig ?? {}),
+    sidebarTabs: Array.isArray(data.pageConfig?.sidebarTabs)
+      ? data.pageConfig.sidebarTabs
+      : DEFAULT_SIDEBAR_TABS,
+  };
+
   return {
     ...EMPTY_WORKSPACE,
     ...data,
@@ -30,10 +39,11 @@ function normalizeWorkspace(data: WorkspaceData): WorkspaceData {
       Array.isArray(data.interviewSections) && data.interviewSections.length > 0
         ? data.interviewSections
         : INTERVIEW_SECTIONS,
-    pageConfig: {
-      ...DEFAULT_PAGE_CONFIG,
-      ...(data.pageConfig ?? {}),
-    },
+    pageConfig: mergedPageConfig,
+    customTabContents:
+      data.customTabContents && typeof data.customTabContents === 'object'
+        ? data.customTabContents
+        : {},
   };
 }
 

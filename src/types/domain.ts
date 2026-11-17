@@ -206,6 +206,50 @@ export interface InterviewSection {
   questions: InterviewQuestion[];
 }
 
+export type SidebarIconName =
+  | 'LayoutDashboard'
+  | 'Building2'
+  | 'ClipboardCheck'
+  | 'FileSpreadsheet'
+  | 'Calculator'
+  | 'BarChart3'
+  | 'Gauge'
+  | 'Sparkles'
+  | 'ListChecks'
+  | 'FileText'
+  | 'SlidersHorizontal'
+  | 'Folder'
+  | 'Briefcase'
+  | 'Target'
+  | 'Package'
+  | 'Truck'
+  | 'Users'
+  | 'CheckSquare';
+
+export interface SidebarTab {
+  id: string;
+  label: string;
+  icon: SidebarIconName;
+  isCustom?: boolean;
+}
+
+export interface CustomTabItem {
+  id: string;
+  title: string;
+  responsible: string;
+  status: 'Pendiente' | 'En progreso' | 'Completado';
+  notes: string;
+}
+
+export interface CustomTabContent {
+  tabId: string;
+  heading: string;
+  description: string;
+  bodyText: string;
+  items: CustomTabItem[];
+  updatedAt: string;
+}
+
 export interface PageConfig {
   appTitle: string;
   appSubtitle: string;
@@ -218,6 +262,7 @@ export interface PageConfig {
   pdfHeaderTitle: string;
   pdfIntroText: string;
   navLabels: Record<string, string>;
+  sidebarTabs?: SidebarTab[];
 }
 
 export interface WorkspaceData {
@@ -229,4 +274,5 @@ export interface WorkspaceData {
   customTargets: Record<string, Record<string, number>>; // companyId -> kpiId -> target
   interviewSections?: InterviewSection[];
   pageConfig?: PageConfig;
+  customTabContents?: Record<string, CustomTabContent>;
 }

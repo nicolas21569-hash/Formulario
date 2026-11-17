@@ -1,8 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, ClipboardEdit, Palette, RotateCcw, Save } from 'lucide-react';
-import { DEFAULT_PAGE_CONFIG } from '../data/interviewSchema';
-import { PageConfig } from '../types/domain';
-import { NAV_ITEMS, NavSection } from './Sidebar';
+import {
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  ClipboardEdit,
+  Palette,
+  Plus,
+  RotateCcw,
+  Save,
+  Trash2,
+} from 'lucide-react';
+import { DEFAULT_PAGE_CONFIG, DEFAULT_SIDEBAR_TABS } from '../data/interviewSchema';
+import { PageConfig, SidebarIconName, SidebarTab } from '../types/domain';
+import { generateId } from '../utils/formatters';
+import { CUSTOM_ICON_OPTIONS, NavSection, SIDEBAR_ICON_MAP } from './Sidebar';
 
 interface PageEditorViewProps {
   pageConfig: PageConfig;
@@ -17,6 +28,19 @@ const COLOR_PRESETS = [
   { name: 'Petróleo Oscuro y Teal', primary: '#0F3D3E', accent: '#0D9488' },
 ];
 
+const ALL_ICON_OPTIONS: Array<{ value: SidebarIconName; label: string }> = [
+  ...CUSTOM_ICON_OPTIONS,
+  { value: 'LayoutDashboard', label: 'Panel' },
+  { value: 'Building2', label: 'Empresa' },
+  { value: 'ClipboardCheck', label: 'Entrevista' },
+  { value: 'FileSpreadsheet', label: 'Hoja de datos' },
+  { value: 'Calculator', label: 'Indicadores' },
+  { value: 'Gauge', label: 'Diagnóstico' },
+  { value: 'Sparkles', label: 'IA' },
+  { value: 'ListChecks', label: 'Plan de mejora' },
+  { value: 'SlidersHorizontal', label: 'Configuración' },
+];
+
 export const PageEditorView: React.FC<PageEditorViewProps> = ({
   pageConfig,
   onSavePageConfig,
@@ -24,33 +48,81 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
 }) => {
   const [form, setForm] = useState<PageConfig>(pageConfig);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [newTabName, setNewTabName] = useState('');
+  const [newTabIcon, setNewTabIcon] = useState<SidebarIconName>('Folder');
 
   useEffect(() => {
     setForm(pageConfig);
   }, [pageConfig]);
 
+  const currentTabs: SidebarTab[] =
+    form.sidebarTabs && form.sidebarTabs.length > 0
+      ? form.sidebarTabs
+      : DEFAULT_SIDEBAR_TABS;
+
+  const missingBuiltIn = DEFAULT_SIDEBAR_TABS.filter(
+    (d) => !currentTabs.some((t) => t.id === d.id)
+  );
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSavePageConfig(form);
-    setSavedNotice('Configuración de la página guardada y aplicada en toda la plataforma.');
+    setSavedNotice('Configuración de la página y pestañas guardada correctamente.');
     setTimeout(() => setSavedNotice(null), 3500);
   };
 
   const handleReset = () => {
     setForm(DEFAULT_PAGE_CONFIG);
     onSavePageConfig(DEFAULT_PAGE_CONFIG);
-    setSavedNotice('Se restablecieron los textos y colores predeterminados de la página.');
+    setSavedNotice('Se restablecieron los textos, colores y pestañas predeterminadas.');
     setTimeout(() => setSavedNotice(null), 3500);
   };
 
-  const updateNavLabel = (id: string, value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      navLabels: {
-        ...prev.navLabels,
-        [id]: value,
-      },
-    }));
+  const updateTab = (idx: number, patch: Partial<SidebarTab>) => {
+    const nextTabs = currentTabs.map((t, i) => (i === idx ? { ...t, ...patch } : t));
+    setForm({ ...form, sidebarTabs: nextTabs });
+  };
+
+  const moveTab = (idx: number, dir: -1 | 1) => {
+    const target = idx + dir;
+    if (target < 0 || target >= currentTabs.length) return;
+    const copy = [...currentTabs];
+    [copy[idx], copy[target]] = [copy[target], copy[idx]];
+    setForm({ ...form, sidebarTabs: copy });
+  };
+
+  const removeTab = (idx: number) => {
+    if (currentTabs.length <= 1) return;
+    const nextTabs = currentTabs.filter((_, i) => i !== idx);
+    setForm({ ...form, sidebarTabs: nextTabs });
+  };
+
+  const addCustomTab = () => {
+    if (!newTabName.trim()) return;
+    const created: SidebarTab = {
+      id: generateId('tab'),
+      label: newTabName.trim(),
+      icon: newTabIcon,
+      isCustom: true,
+    };
+    const nextConfig: PageConfig = {
+      ...form,
+      sidebarTabs: [...currentTabs, created],
+    };
+    setForm(nextConfig);
+    onSavePageConfig(nextConfig);
+    setNewTabName('');
+    setSavedNotice(`Pestaña "${created.label}" implementada en el panel izquierdo.`);
+    setTimeout(() => setSavedNotice(null), 3500);
+  };
+
+  const restoreBuiltInTab = (tab: SidebarTab) => {
+    const nextConfig: PageConfig = {
+      ...form,
+      sidebarTabs: [...currentTabs, tab],
+    };
+    setForm(nextConfig);
+    onSavePageConfig(nextConfig);
   };
 
   return (
@@ -58,10 +130,10 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-5">
         <div>
           <h2 className="font-display text-2xl font-bold text-[#0B1E3B]">
-            Editor de la Página y Apariencia
+            Editor de la Página y Pestañas
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Personalice los títulos, textos del panel principal, etiquetas del menú, colores corporativos y textos de los informes PDF.
+            Implemente o borre pestañas del panel izquierdo, y personalice textos, colores e informes PDF.
           </p>
         </div>
 
@@ -72,7 +144,7 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
           >
             <ClipboardEdit className="h-4 w-4" />
-            <span>Editar Preguntas de Entrevista</span>
+            <span>Editar Preguntas</span>
           </button>
           <button
             type="button"
@@ -80,7 +152,7 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
           >
             <RotateCcw className="h-4 w-4" />
-            <span>Restablecer</span>
+            <span>Restablecer todo</span>
           </button>
         </div>
       </div>
@@ -93,11 +165,153 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Gestor de Pestañas del Panel Izquierdo */}
+        <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-5">
+          <div className="border-b border-slate-100 pb-3">
+            <h3 className="font-display text-base font-bold text-[#0B1E3B]">
+              1. Pestañas del Panel Izquierdo ({currentTabs.length} activas)
+            </h3>
+            <p className="text-xs text-slate-500">
+              Implemente nuevas pestañas personalizadas, cambie el nombre o ícono, reordénelas o elimine las que no necesite.
+            </p>
+          </div>
+
+          {/* Agregar nueva pestaña */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <p className="text-xs font-bold text-[#0B1E3B]">Implementar nueva pestaña personalizada</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 items-end">
+              <div className="sm:col-span-6">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Nombre de la pestaña
+                </label>
+                <input
+                  type="text"
+                  value={newTabName}
+                  onChange={(e) => setNewTabName(e.target.value)}
+                  placeholder="Ej. Seguridad Industrial / Presupuesto / Proveedores"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+              <div className="sm:col-span-3">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Ícono</label>
+                <select
+                  value={newTabIcon}
+                  onChange={(e) => setNewTabIcon(e.target.value as SidebarIconName)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                >
+                  {ALL_ICON_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-3">
+                <button
+                  type="button"
+                  onClick={addCustomTab}
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#15803D] px-4 py-2 text-sm font-medium text-white hover:bg-[#166534] cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Implementar pestaña</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Lista de pestañas actuales */}
+          <div className="space-y-2">
+            {currentTabs.map((tab, idx) => {
+              const Icon = SIDEBAR_ICON_MAP[tab.icon] ?? SIDEBAR_ICON_MAP.FileText;
+              return (
+                <div
+                  key={tab.id}
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5"
+                >
+                  <Icon className="h-4 w-4 text-[#0B1E3B] shrink-0" />
+                  <input
+                    type="text"
+                    value={tab.label}
+                    onChange={(e) => updateTab(idx, { label: e.target.value })}
+                    className="flex-1 min-w-[160px] rounded border border-slate-300 px-2.5 py-1 text-sm font-medium focus:border-[#0B1E3B] focus:outline-none"
+                  />
+                  <select
+                    value={tab.icon}
+                    onChange={(e) =>
+                      updateTab(idx, { icon: e.target.value as SidebarIconName })
+                    }
+                    className="rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    {ALL_ICON_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[11px] text-slate-500 min-w-[75px]">
+                    {tab.isCustom ? 'Personalizada' : 'Sistema'}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveTab(idx, -1)}
+                      disabled={idx === 0}
+                      className="rounded border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
+                      title="Subir"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveTab(idx, 1)}
+                      disabled={idx === currentTabs.length - 1}
+                      className="rounded border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
+                      title="Bajar"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeTab(idx)}
+                      disabled={currentTabs.length <= 1}
+                      className="rounded border border-red-200 p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-30 cursor-pointer"
+                      title="Borrar pestaña del panel izquierdo"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {missingBuiltIn.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+              <p className="text-xs font-semibold text-slate-700">
+                Pestañas del sistema eliminadas (clic para volver a implementar):
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {missingBuiltIn.map((mt) => (
+                  <button
+                    key={mt.id}
+                    type="button"
+                    onClick={() => restoreBuiltInTab(mt)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-[#0B1E3B] hover:bg-emerald-50 cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5 text-[#15803D]" />
+                    <span>{mt.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Identidad y Marca */}
         <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
           <div className="border-b border-slate-100 pb-3">
             <h3 className="font-display text-base font-bold text-[#0B1E3B]">
-              1. Identidad y Textos Principales de la Página
+              2. Identidad y Textos Principales de la Página
             </h3>
             <p className="text-xs text-slate-500">
               Modifique el nombre visible en la barra lateral, pestaña del navegador y encabezados del panel principal.
@@ -186,7 +400,7 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
             <Palette className="h-4 w-4 text-[#0B1E3B]" />
             <div>
               <h3 className="font-display text-base font-bold text-[#0B1E3B]">
-                2. Colores de la Página
+                3. Colores de la Página
               </h3>
               <p className="text-xs text-slate-500">
                 Elija una combinación predefinida o seleccione colores corporativos propios.
@@ -204,14 +418,8 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
                 }
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
-                <span
-                  className="h-3.5 w-3.5 rounded-sm"
-                  style={{ backgroundColor: preset.primary }}
-                />
-                <span
-                  className="h-3.5 w-3.5 rounded-sm"
-                  style={{ backgroundColor: preset.accent }}
-                />
+                <span className="h-3.5 w-3.5 rounded-sm" style={{ backgroundColor: preset.primary }} />
+                <span className="h-3.5 w-3.5 rounded-sm" style={{ backgroundColor: preset.accent }} />
                 <span>{preset.name}</span>
               </button>
             ))}
@@ -227,7 +435,7 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
               />
               <div className="flex-1">
                 <label className="block text-xs font-semibold text-slate-700">
-                  Color principal (Menú lateral y títulos)
+                  Color principal (Menú lateral)
                 </label>
                 <input
                   type="text"
@@ -247,7 +455,7 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
               />
               <div className="flex-1">
                 <label className="block text-xs font-semibold text-slate-700">
-                  Color de acento (Botones activos y destacados)
+                  Color de acento (Botones activos)
                 </label>
                 <input
                   type="text"
@@ -257,34 +465,6 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
                 />
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Etiquetas del Menú */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
-          <div className="border-b border-slate-100 pb-3">
-            <h3 className="font-display text-base font-bold text-[#0B1E3B]">
-              3. Nombres de las Secciones del Menú Lateral
-            </h3>
-            <p className="text-xs text-slate-500">
-              Renombre cualquier módulo de navegación según la terminología de su empresa o consultoría.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {NAV_ITEMS.filter((item) => item.id !== 'pageEditor').map((item) => (
-              <div key={item.id}>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Original: {item.label}
-                </label>
-                <input
-                  type="text"
-                  value={form.navLabels[item.id] ?? item.label}
-                  onChange={(e) => updateNavLabel(item.id, e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-[#0B1E3B] focus:outline-none"
-                />
-              </div>
-            ))}
           </div>
         </div>
 
@@ -313,7 +493,7 @@ export const PageEditorView: React.FC<PageEditorViewProps> = ({
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Introducción personalizada del informe PDF (dejar vacío para usar introducción automática por empresa)
+                Introducción personalizada del informe PDF
               </label>
               <textarea
                 rows={3}

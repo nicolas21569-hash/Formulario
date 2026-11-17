@@ -27,7 +27,12 @@ export const TopBar: React.FC<TopBarProps> = ({
   saveStatus,
   pageConfig = DEFAULT_PAGE_CONFIG,
 }) => {
-  const defaultLabel = NAV_ITEMS.find((i) => i.id === activeSection)?.label ?? 'Panel Principal';
+  const tabs = pageConfig.sidebarTabs ?? [];
+  const matchedTab = tabs.find((t) => t.id === activeSection);
+  const defaultLabel =
+    matchedTab?.label ??
+    NAV_ITEMS.find((i) => i.id === activeSection)?.label ??
+    'Panel Principal';
   const sectionLabel =
     (pageConfig.navLabels && pageConfig.navLabels[activeSection]) || defaultLabel;
   const accentColor = pageConfig.accentColor || '#15803D';

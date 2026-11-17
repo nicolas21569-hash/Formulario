@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AIRecommendationsView } from './components/AIRecommendationsView';
 import { ChartsView } from './components/ChartsView';
 import { CompaniesView } from './components/CompaniesView';
+import { CustomTabView } from './components/CustomTabView';
 import { DashboardView } from './components/DashboardView';
 import { DiagnosticView } from './components/DiagnosticView';
 import { ImprovementPlanView } from './components/ImprovementPlanView';
@@ -12,16 +13,22 @@ import { PageEditorView } from './components/PageEditorView';
 import { ReportsView } from './components/ReportsView';
 import { NavSection, Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
-import { DEFAULT_PAGE_CONFIG, INTERVIEW_SECTIONS } from './data/interviewSchema';
+import {
+  DEFAULT_PAGE_CONFIG,
+  DEFAULT_SIDEBAR_TABS,
+  INTERVIEW_SECTIONS,
+} from './data/interviewSchema';
 import { EMPTY_WORKSPACE, loadWorkspace, persistWorkspace } from './services/api';
 import {
   AIAnalysisReport,
   Company,
+  CustomTabContent,
   ImprovementAction,
   Interview,
   InterviewSection,
   MonthlyMetrics,
   PageConfig,
+  SidebarTab,
   WorkspaceData,
 } from './types/domain';
 import { buildDemoDataset, DEMO_COMPANY_ID } from './utils/demoData';
@@ -43,6 +50,10 @@ export default function App() {
       if (data.companies.length > 0) {
         setSelectedCompanyId(data.companies[0].id);
       }
+      const tabs = data.pageConfig?.sidebarTabs ?? DEFAULT_SIDEBAR_TABS;
+      if (tabs.length > 0 && !tabs.some((t) => t.id === 'dashboard')) {
+        setActiveSection(tabs[0].id);
+      }
       setLoading(false);
     });
     return () => {
@@ -52,6 +63,10 @@ export default function App() {
 
   const pageConfig = workspace.pageConfig ?? DEFAULT_PAGE_CONFIG;
   const interviewSections = workspace.interviewSections ?? INTERVIEW_SECTIONS;
+  const sidebarTabs =
+    pageConfig.sidebarTabs && pageConfig.sidebarTabs.length > 0
+      ? pageConfig.sidebarTabs
+      : DEFAULT_SIDEBAR_TABS;
 
   useEffect(() => {
     if (pageConfig.appTitle) {
@@ -164,6 +179,51 @@ export default function App() {
     }));
   };
 
+  const handleUpdateSidebarTabs = (tabs: SidebarTab[]) => {
+    updateWorkspace((prev) => ({
+      ...prev,
+      pageConfig: {
+        ...(prev.pageConfig ?? DEFAULT_PAGE_CONFIG),
+        sidebarTabs: tabs,
+      },
+    }));
+  };
+
+  const handleRenameCustomTab = (tabId: string, newLabel: string) => {
+    const nextTabs = sidebarTabs.map((t) => (t.id === tabId ? { ...t, label: newLabel } : t));
+    handleUpdateSidebarTabs(nextTabs);
+  };
+
+  const handleDeleteCustomTab = (tabId: string) => {
+    if (sidebarTabs.length <= 1) return;
+    const nextTabs = sidebarTabs.filter((t) => t.id !== tabId);
+    updateWorkspace((prev) => {
+      const nextContents = { ...(prev.customTabContents ?? {}) };
+      delete nextContents[tabId];
+      return {
+        ...prev,
+        pageConfig: {
+          ...(prev.pageConfig ?? DEFAULT_PAGE_CONFIG),
+          sidebarTabs: nextTabs,
+        },
+        customTabContents: nextContents,
+      };
+    });
+    if (activeSection === tabId && nextTabs.length > 0) {
+      setActiveSection(nextTabs[0].id);
+    }
+  };
+
+  const handleSaveCustomTabContent = (content: CustomTabContent) => {
+    updateWorkspace((prev) => ({
+      ...prev,
+      customTabContents: {
+        ...(prev.customTabContents ?? {}),
+        [content.tabId]: content,
+      },
+    }));
+  };
+
   const handleSaveMetrics = (record: MonthlyMetrics) => {
     updateWorkspace((prev) => {
       const exists = prev.metrics.some(
@@ -258,6 +318,8 @@ export default function App() {
     }
   };
 
+  const activeCustomTab = sidebarTabs.find((t) => t.id === activeSection && t.isCustom);
+
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-900">
       <Sidebar
@@ -267,6 +329,7 @@ export default function App() {
         onCloseMobile={() => setMobileMenuOpen(false)}
         alertCount={activeAlertCount}
         pageConfig={pageConfig}
+        onUpdateTabs={handleUpdateSidebarTabs}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -424,6 +487,16 @@ export default function App() {
                   pageConfig={pageConfig}
                   onSavePageConfig={handleSavePageConfig}
                   onNavigate={setActiveSection}
+                />
+              )}
+
+              {activeCustomTab && (
+                <CustomTabView
+                  tab={activeCustomTab}
+                  content={(workspace.customTabContents ?? {})[activeCustomTab.id]}
+                  onSaveContent={handleSaveCustomTabContent}
+                  onRenameTab={handleRenameCustomTab}
+                  onDeleteTab={handleDeleteCustomTab}
                 />
               )}
             </>

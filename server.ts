@@ -20,6 +20,7 @@ interface WorkspaceStore {
   customTargets: Record<string, Record<string, number>>;
   interviewSections?: unknown[];
   pageConfig?: Record<string, unknown>;
+  customTabContents?: Record<string, unknown>;
 }
 
 const DEFAULT_STORE: WorkspaceStore = {
@@ -51,6 +52,9 @@ function ensureDb(): WorkspaceStore {
       customTargets: parsed.customTargets && typeof parsed.customTargets === 'object' ? parsed.customTargets : {},
       ...(Array.isArray(parsed.interviewSections) ? { interviewSections: parsed.interviewSections } : {}),
       ...(parsed.pageConfig && typeof parsed.pageConfig === 'object' ? { pageConfig: parsed.pageConfig } : {}),
+      ...(parsed.customTabContents && typeof parsed.customTabContents === 'object'
+        ? { customTabContents: parsed.customTabContents }
+        : {}),
     };
   } catch {
     return { ...DEFAULT_STORE };
@@ -87,6 +91,9 @@ app.put('/api/workspace', (req, res) => {
       customTargets: body.customTargets && typeof body.customTargets === 'object' ? body.customTargets : {},
       ...(Array.isArray(body.interviewSections) ? { interviewSections: body.interviewSections } : {}),
       ...(body.pageConfig && typeof body.pageConfig === 'object' ? { pageConfig: body.pageConfig } : {}),
+      ...(body.customTabContents && typeof body.customTabContents === 'object'
+        ? { customTabContents: body.customTabContents }
+        : {}),
     };
     saveDb(nextStore);
     res.json({ ok: true, savedAt: new Date().toISOString() });

@@ -1,4 +1,18 @@
-import { InterviewSection, PageConfig } from '../types/domain';
+import { InterviewSection, PageConfig, SidebarTab } from '../types/domain';
+
+export const DEFAULT_SIDEBAR_TABS: SidebarTab[] = [
+  { id: 'dashboard', label: 'Panel Principal', icon: 'LayoutDashboard' },
+  { id: 'companies', label: 'Registro de Empresas', icon: 'Building2' },
+  { id: 'interviews', label: 'Módulo de Entrevistas', icon: 'ClipboardCheck' },
+  { id: 'metrics', label: 'Datos Numéricos', icon: 'FileSpreadsheet' },
+  { id: 'kpis', label: 'Indicadores KPI', icon: 'Calculator' },
+  { id: 'charts', label: 'Gráficas Automáticas', icon: 'BarChart3' },
+  { id: 'diagnostic', label: 'Diagnóstico y DOFA', icon: 'Gauge' },
+  { id: 'ai', label: 'Recomendaciones IA', icon: 'Sparkles' },
+  { id: 'plan', label: 'Plan de Mejoramiento', icon: 'ListChecks' },
+  { id: 'reports', label: 'Informes PDF', icon: 'FileText' },
+  { id: 'pageEditor', label: 'Editar Página', icon: 'SlidersHorizontal' },
+];
 
 export const DEFAULT_PAGE_CONFIG: PageConfig = {
   appTitle: 'Diagnóstico Empresarial',
@@ -13,6 +27,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
   pdfHeaderTitle: 'INFORME TÉCNICO DE DIAGNÓSTICO EMPRESARIAL Y GESTIÓN LOGÍSTICA',
   pdfIntroText: '',
   navLabels: {},
+  sidebarTabs: DEFAULT_SIDEBAR_TABS,
 };
 
 export const INTERVIEW_SECTIONS: InterviewSection[] = [
