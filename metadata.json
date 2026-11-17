@@ -1,0 +1,6 @@
+{
+  "name": "Diagnóstico Empresarial",
+  "description": "Plataforma empresarial integral para realizar diagnósticos mediante entrevistas, análisis de procesos logísticos, cálculo automático de indicadores KPI, matriz DOFA, recomendaciones con IA, planes de mejoramiento e informes PDF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
