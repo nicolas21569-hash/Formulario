@@ -7,9 +7,10 @@ import {
   Plus,
   Search,
   Trash2,
+  Users,
   X,
 } from 'lucide-react';
-import { BusinessSector, Company, WorkspaceData } from '../types/domain';
+import { BusinessSector, Company, OrgPosition, WorkspaceData } from '../types/domain';
 import { generateId } from '../utils/formatters';
 import { calculateKPIs, getOverallCompliance } from '../utils/kpiEngine';
 import { NavSection } from './Sidebar';
@@ -24,27 +25,75 @@ interface CompaniesViewProps {
 }
 
 const SECTORS: BusinessSector[] = [
+  'Alimentos y Productos para Mascotas',
+  'Distribución',
   'Comercial',
+  'Almacenamiento',
+  'Transporte',
+  'Servicios',
   'Industrial',
   'Restaurante',
-  'Transporte',
-  'Almacenamiento',
-  'Servicios',
-  'Distribución',
   'Otro',
 ];
 
-const EMPTY_FORM: Omit<Company, 'id' | 'createdAt' | 'updatedAt'> = {
+const AREA_SUGGESTIONS = [
+  'Dirección / Gerencia',
+  'Administración y Finanzas',
+  'Compras y Abastecimiento',
+  'Recepción y Almacén',
+  'Almacenamiento e Inventarios',
+  'Preparación de Pedidos y Operaciones',
+  'Transporte y Distribución',
+  'Ventas y Servicio al Cliente',
+];
+
+interface CompanyFormState {
+  name: string;
+  nit: string;
+  economicActivity: string;
+  sector: BusinessSector;
+  address: string;
+  city: string;
+  representativeName: string;
+  representativeRole: string;
+  representativeDocument: string;
+  representativePhone: string;
+  representativeEmail: string;
+  intervieweeName: string;
+  intervieweeRole: string;
+  intervieweeArea: string;
+  intervieweeTenure: string;
+  employeesCount: number;
+  yearsOperating: string;
+  hasOrgChart: 'Sí' | 'No' | 'En construcción';
+  orgChartDescription: string;
+  existingPositions: OrgPosition[];
+  phone: string;
+  email: string;
+  registrationDate: string;
+}
+
+const EMPTY_FORM: CompanyFormState = {
   name: '',
   nit: '',
-  economicActivity: '',
-  sector: 'Comercial',
+  economicActivity: 'Comercialización de alimentos y productos para mascotas',
+  sector: 'Alimentos y Productos para Mascotas',
   address: '',
   city: '',
   representativeName: '',
+  representativeRole: 'Representante Legal / Propietario',
+  representativeDocument: '',
+  representativePhone: '',
+  representativeEmail: '',
+  intervieweeName: '',
   intervieweeRole: '',
+  intervieweeArea: '',
+  intervieweeTenure: '',
   employeesCount: 1,
   yearsOperating: '',
+  hasOrgChart: 'No',
+  orgChartDescription: '',
+  existingPositions: [],
   phone: '',
   email: '',
   registrationDate: new Date().toISOString().slice(0, 10),
@@ -60,7 +109,7 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
 }) => {
   const [showForm, setShowForm] = useState(workspace.companies.length === 0);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState<CompanyFormState>(EMPTY_FORM);
   const [search, setSearch] = useState('');
   const [sectorFilter, setSectorFilter] = useState<string>('Todos');
   const [compareMode, setCompareMode] = useState(false);
@@ -96,9 +145,19 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
       address: company.address,
       city: company.city,
       representativeName: company.representativeName,
-      intervieweeRole: company.intervieweeRole,
+      representativeRole: company.representativeRole ?? 'Representante Legal / Propietario',
+      representativeDocument: company.representativeDocument ?? '',
+      representativePhone: company.representativePhone ?? '',
+      representativeEmail: company.representativeEmail ?? '',
+      intervieweeName: company.intervieweeName ?? '',
+      intervieweeRole: company.intervieweeRole ?? '',
+      intervieweeArea: company.intervieweeArea ?? '',
+      intervieweeTenure: company.intervieweeTenure ?? '',
       employeesCount: company.employeesCount,
       yearsOperating: company.yearsOperating,
+      hasOrgChart: company.hasOrgChart ?? 'No',
+      orgChartDescription: company.orgChartDescription ?? '',
+      existingPositions: company.existingPositions ?? [],
       phone: company.phone,
       email: company.email,
       registrationDate: company.registrationDate,
@@ -107,10 +166,40 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
     setShowForm(true);
   };
 
+  const handleAddPosition = () => {
+    setForm((prev) => ({
+      ...prev,
+      existingPositions: [
+        ...prev.existingPositions,
+        {
+          id: generateId('pos'),
+          positionTitle: '',
+          area: 'Almacenamiento e Inventarios',
+          employeesInRole: 1,
+          reportsTo: '',
+        },
+      ],
+    }));
+  };
+
+  const handleUpdatePosition = (id: string, patch: Partial<OrgPosition>) => {
+    setForm((prev) => ({
+      ...prev,
+      existingPositions: prev.existingPositions.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    }));
+  };
+
+  const handleRemovePosition = (id: string) => {
+    setForm((prev) => ({
+      ...prev,
+      existingPositions: prev.existingPositions.filter((p) => p.id !== id),
+    }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.nit.trim() || !form.representativeName.trim()) {
-      setErrorMsg('Por favor complete al menos el Nombre de la empresa, NIT y Nombre del representante.');
+      setErrorMsg('Por favor complete al menos el Nombre de la empresa, NIT y Nombre del representante legal.');
       return;
     }
 
@@ -122,6 +211,7 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
       name: form.name.trim(),
       nit: form.nit.trim(),
       employeesCount: Number(form.employeesCount) || 0,
+      existingPositions: form.existingPositions.filter((p) => p.positionTitle.trim() !== ''),
       isDemo: existing?.isDemo,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
@@ -158,10 +248,10 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-5">
         <div>
           <h2 className="font-display text-2xl font-bold text-[#0B1E3B]">
-            Registro y Directorio de Empresas
+            Registro Empresarial y Estructura Organizacional
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Administre múltiples empresas de cualquier sector, consulte sus expedientes y compare resultados.
+            Separe claramente representante legal, trabajador entrevistado, antigüedad, organigrama y cargos existentes.
           </p>
         </div>
 
@@ -195,21 +285,21 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className="rounded-xl border border-slate-200 bg-white p-6 space-y-5"
+          className="rounded-xl border border-slate-200 bg-white p-6 space-y-6"
         >
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
               <h3 className="font-display text-lg font-semibold text-[#0B1E3B]">
-                {editingId ? 'Editar Información de Empresa' : 'Formulario de Registro Empresarial'}
+                {editingId ? 'Editar Expediente Empresarial' : 'Formulario de Registro Empresarial'}
               </h3>
               <p className="text-xs text-slate-500">
-                Complete los datos generales de identificación y contacto de la organización.
+                Complete los datos generales, del representante legal, del entrevistado principal y la estructura de cargos.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
               aria-label="Cerrar formulario"
             >
               <X className="h-5 w-5" />
@@ -222,173 +312,395 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Nombre de la empresa *
-              </label>
-              <input
-                type="text"
-                required
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Ej. Logística del Valle S.A.S."
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
+          {/* Bloque 1: Empresa */}
+          <div className="space-y-3">
+            <h4 className="font-display text-sm font-bold text-[#0B1E3B] border-b border-slate-100 pb-2">
+              1. Identificación y Datos Generales de la Empresa
+            </h4>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nombre / Razón social *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="Ej. Distribuidora PetSalud S.A.S."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">NIT *</label>
-              <input
-                type="text"
-                required
-                value={form.nit}
-                onChange={(e) => setForm({ ...form, nit: e.target.value })}
-                placeholder="Ej. 901.234.567-8"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">NIT *</label>
+                <input
+                  type="text"
+                  required
+                  value={form.nit}
+                  onChange={(e) => setForm({ ...form, nit: e.target.value })}
+                  placeholder="Ej. 901.234.567-8"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Sector empresarial *
-              </label>
-              <select
-                value={form.sector}
-                onChange={(e) => setForm({ ...form, sector: e.target.value as BusinessSector })}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Sector empresarial *
+                </label>
+                <select
+                  value={form.sector}
+                  onChange={(e) => setForm({ ...form, sector: e.target.value as BusinessSector })}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                >
+                  {SECTORS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Actividad económica
+                </label>
+                <input
+                  type="text"
+                  value={form.economicActivity}
+                  onChange={(e) => setForm({ ...form, economicActivity: e.target.value })}
+                  placeholder="Ej. Comercialización de alimentos, snacks, medicamentos y accesorios para mascotas"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Ciudad</label>
+                <input
+                  type="text"
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  placeholder="Ej. Medellín"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Dirección</label>
+                <input
+                  type="text"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  placeholder="Ej. Cra 45 # 12-30"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Antigüedad de la empresa
+                </label>
+                <input
+                  type="text"
+                  value={form.yearsOperating}
+                  onChange={(e) => setForm({ ...form, yearsOperating: e.target.value })}
+                  placeholder="Ej. 8 años"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Número total de empleados
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.employeesCount}
+                  onChange={(e) => setForm({ ...form, employeesCount: Number(e.target.value) })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono tabular-nums focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Teléfono empresa</label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="Ej. +57 300 123 4567"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Correo electrónico empresa
+                </label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  placeholder="contacto@empresa.com"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Fecha de registro
+                </label>
+                <input
+                  type="date"
+                  value={form.registrationDate}
+                  onChange={(e) => setForm({ ...form, registrationDate: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Bloque 2: Representante Legal o Propietario */}
+          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+            <h4 className="font-display text-sm font-bold text-[#0B1E3B]">
+              2. Datos del Representante Legal o Propietario
+            </h4>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nombre completo del representante / propietario *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.representativeName}
+                  onChange={(e) => setForm({ ...form, representativeName: e.target.value })}
+                  placeholder="Ej. Ricardo Gómez Villalobos"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Cargo / Calidad jurídica
+                </label>
+                <input
+                  type="text"
+                  value={form.representativeRole}
+                  onChange={(e) => setForm({ ...form, representativeRole: e.target.value })}
+                  placeholder="Ej. Representante Legal / Propietario"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Documento de identidad
+                </label>
+                <input
+                  type="text"
+                  value={form.representativeDocument}
+                  onChange={(e) => setForm({ ...form, representativeDocument: e.target.value })}
+                  placeholder="Ej. C.C. 79.642.118"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Teléfono del representante
+                </label>
+                <input
+                  type="tel"
+                  value={form.representativePhone}
+                  onChange={(e) => setForm({ ...form, representativePhone: e.target.value })}
+                  placeholder="Ej. +57 310 555 0100"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Correo electrónico del representante
+                </label>
+                <input
+                  type="email"
+                  value={form.representativeEmail}
+                  onChange={(e) => setForm({ ...form, representativeEmail: e.target.value })}
+                  placeholder="gerencia@empresa.com"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Bloque 3: Trabajador Entrevistado Principal */}
+          <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-4">
+            <h4 className="font-display text-sm font-bold text-[#15803D]">
+              3. Datos del Trabajador Entrevistado Principal
+            </h4>
+            <p className="text-xs text-slate-600">
+              Para entrevistar múltiples trabajadores por cargo, utilice además el módulo independiente{' '}
+              <strong>Entrevista Individual</strong>.
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nombre del entrevistado
+                </label>
+                <input
+                  type="text"
+                  value={form.intervieweeName}
+                  onChange={(e) => setForm({ ...form, intervieweeName: e.target.value })}
+                  placeholder="Ej. Carolina Méndez"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Cargo del trabajador
+                </label>
+                <input
+                  type="text"
+                  value={form.intervieweeRole}
+                  onChange={(e) => setForm({ ...form, intervieweeRole: e.target.value })}
+                  placeholder="Ej. Coordinadora Logística"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Área de trabajo
+                </label>
+                <input
+                  type="text"
+                  list="company-areas-list"
+                  value={form.intervieweeArea}
+                  onChange={(e) => setForm({ ...form, intervieweeArea: e.target.value })}
+                  placeholder="Ej. Operaciones y Bodega"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Antigüedad del trabajador
+                </label>
+                <input
+                  type="text"
+                  value={form.intervieweeTenure}
+                  onChange={(e) => setForm({ ...form, intervieweeTenure: e.target.value })}
+                  placeholder="Ej. 4 años y 6 meses"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Bloque 4: Organigrama y Cargos Existentes */}
+          <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+              <div>
+                <h4 className="font-display text-sm font-bold text-[#0B1E3B]">
+                  4. Organigrama y Cargos Existentes
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Indique la estructura jerárquica y los cargos reales registrados en la empresa.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddPosition}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#0B1E3B] bg-white px-3 py-1.5 text-xs font-medium text-[#0B1E3B] hover:bg-slate-50 cursor-pointer"
               >
-                {SECTORS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
+                <Plus className="h-3.5 w-3.5" />
+                <span>Agregar Cargo</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  ¿Tiene organigrama formal?
+                </label>
+                <select
+                  value={form.hasOrgChart}
+                  onChange={(e) =>
+                    setForm({ ...form, hasOrgChart: e.target.value as 'Sí' | 'No' | 'En construcción' })
+                  }
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                >
+                  <option value="Sí">Sí</option>
+                  <option value="En construcción">En construcción</option>
+                  <option value="No">No</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Descripción del organigrama / líneas de mando
+                </label>
+                <input
+                  type="text"
+                  value={form.orgChartDescription}
+                  onChange={(e) => setForm({ ...form, orgChartDescription: e.target.value })}
+                  placeholder="Ej. Gerencia General coordina Compras, Bodega/Despachos y Punto de Venta..."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {form.existingPositions.length > 0 && (
+              <div className="space-y-2 pt-2">
+                {form.existingPositions.map((pos) => (
+                  <div
+                    key={pos.id}
+                    className="grid grid-cols-1 gap-2 sm:grid-cols-12 items-center rounded-lg border border-slate-200 bg-slate-50/70 p-2.5"
+                  >
+                    <input
+                      type="text"
+                      value={pos.positionTitle}
+                      onChange={(e) => handleUpdatePosition(pos.id, { positionTitle: e.target.value })}
+                      placeholder="Nombre del cargo"
+                      className="sm:col-span-4 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
+                    />
+                    <input
+                      type="text"
+                      list="company-areas-list"
+                      value={pos.area}
+                      onChange={(e) => handleUpdatePosition(pos.id, { area: e.target.value })}
+                      placeholder="Área"
+                      className="sm:col-span-3 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      value={pos.employeesInRole}
+                      onChange={(e) =>
+                        handleUpdatePosition(pos.id, { employeesInRole: Number(e.target.value) || 1 })
+                      }
+                      title="Personas en este cargo"
+                      className="sm:col-span-2 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-mono tabular-nums"
+                    />
+                    <input
+                      type="text"
+                      value={pos.reportsTo ?? ''}
+                      onChange={(e) => handleUpdatePosition(pos.id, { reportsTo: e.target.value })}
+                      placeholder="Reporta a"
+                      className="sm:col-span-2 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePosition(pos.id)}
+                      className="sm:col-span-1 justify-self-end rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                      aria-label="Quitar cargo"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ))}
-              </select>
-            </div>
+              </div>
+            )}
 
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Actividad económica
-              </label>
-              <input
-                type="text"
-                value={form.economicActivity}
-                onChange={(e) => setForm({ ...form, economicActivity: e.target.value })}
-                placeholder="Ej. Fabricación y comercialización de productos alimenticios"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Ciudad</label>
-              <input
-                type="text"
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-                placeholder="Ej. Medellín"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Dirección</label>
-              <input
-                type="text"
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                placeholder="Ej. Cra 45 # 12-30"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Nombre del representante *
-              </label>
-              <input
-                type="text"
-                required
-                value={form.representativeName}
-                onChange={(e) => setForm({ ...form, representativeName: e.target.value })}
-                placeholder="Ej. Juan Carlos Gómez"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Cargo del entrevistado
-              </label>
-              <input
-                type="text"
-                value={form.intervieweeRole}
-                onChange={(e) => setForm({ ...form, intervieweeRole: e.target.value })}
-                placeholder="Ej. Director de Operaciones"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Número de empleados
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={form.employeesCount}
-                onChange={(e) => setForm({ ...form, employeesCount: Number(e.target.value) })}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono tabular-nums focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Tiempo de funcionamiento
-              </label>
-              <input
-                type="text"
-                value={form.yearsOperating}
-                onChange={(e) => setForm({ ...form, yearsOperating: e.target.value })}
-                placeholder="Ej. 8 años"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Teléfono</label>
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                placeholder="Ej. +57 300 123 4567"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Correo electrónico
-              </label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="contacto@empresa.com"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Fecha de registro
-              </label>
-              <input
-                type="date"
-                value={form.registrationDate}
-                onChange={(e) => setForm({ ...form, registrationDate: e.target.value })}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:border-[#0B1E3B] focus:outline-none"
-              />
-            </div>
+            <datalist id="company-areas-list">
+              {AREA_SUGGESTIONS.map((a) => (
+                <option key={a} value={a} />
+              ))}
+            </datalist>
           </div>
 
           <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
@@ -413,15 +725,13 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
       {/* Company Comparison View */}
       {compareMode && workspace.companies.length >= 2 && (
         <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="font-display text-base font-semibold text-[#0B1E3B]">
-                Comparación Directa entre Empresas
-              </h3>
-              <p className="text-xs text-slate-500">
-                Marque hasta 4 empresas en la tabla inferior para contrastar sus indicadores clave.
-              </p>
-            </div>
+          <div>
+            <h3 className="font-display text-base font-semibold text-[#0B1E3B]">
+              Comparación Directa entre Empresas
+            </h3>
+            <p className="text-xs text-slate-500">
+              Marque hasta 4 empresas en la tabla inferior para contrastar sus indicadores clave.
+            </p>
           </div>
 
           <div className="overflow-x-auto">
@@ -453,7 +763,7 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
                     </td>
                   ))}
                 </tr>
-                {(comparedData[0]?.kpis ?? []).slice(0, 10).map((refKpi, idx) => (
+                {(comparedData[0]?.kpis ?? []).slice(0, 12).map((refKpi, idx) => (
                   <tr key={refKpi.id}>
                     <td className="px-4 py-2 text-slate-700">{refKpi.name}</td>
                     {comparedData.map(({ company, kpis }) => {
@@ -522,9 +832,9 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
                 <tr>
                   {compareMode && <th className="px-4 py-3 w-10">Comp.</th>}
                   <th className="px-5 py-3">Empresa y NIT</th>
-                  <th className="px-4 py-3">Sector · Ciudad</th>
-                  <th className="px-4 py-3">Representante y Cargo</th>
-                  <th className="px-4 py-3 text-right">Empleados</th>
+                  <th className="px-4 py-3">Sector · Antigüedad</th>
+                  <th className="px-4 py-3">Rep. Legal / Entrevistado</th>
+                  <th className="px-4 py-3 text-right">Personal / Cargos</th>
                   <th className="px-4 py-3 text-right">Cumplimiento</th>
                   <th className="px-5 py-3 text-right">Acciones</th>
                 </tr>
@@ -537,6 +847,7 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
                     workspace.customTargets[c.id]
                   );
                   const comp = getOverallCompliance(cKpis);
+                  const cWorkersCount = (workspace.workers ?? []).filter((w) => w.companyId === c.id).length;
 
                   return (
                     <tr
@@ -570,19 +881,24 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
                           )}
                         </div>
                         <div className="mt-0.5 text-xs text-slate-500">
-                          NIT: {c.nit} · Reg: {c.registrationDate}
+                          NIT: {c.nit} · {c.city || '—'} · Org: {c.hasOrgChart || 'No'}
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-600">
                         <div className="font-medium text-slate-800">{c.sector}</div>
-                        <div>{c.city || '—'} · {c.yearsOperating || '—'}</div>
+                        <div>{c.yearsOperating || '—'}</div>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-600">
-                        <div className="font-medium text-slate-800">{c.representativeName}</div>
-                        <div>{c.intervieweeRole || '—'} · {c.phone || c.email || '—'}</div>
+                        <div className="font-medium text-slate-800">Rep: {c.representativeName}</div>
+                        <div>
+                          Ent: {c.intervieweeName || '—'} ({c.intervieweeRole || '—'})
+                        </div>
                       </td>
-                      <td className="px-4 py-3.5 text-right font-mono tabular-nums text-slate-800">
-                        {c.employeesCount}
+                      <td className="px-4 py-3.5 text-right text-xs font-mono tabular-nums text-slate-800">
+                        <div>{c.employeesCount} emp.</div>
+                        <div className="text-slate-500">
+                          {c.existingPositions?.length ?? 0} cargos · {cWorkersCount} trab.
+                        </div>
                       </td>
                       <td className="px-4 py-3.5 text-right font-mono font-semibold tabular-nums">
                         {comp !== null ? (
@@ -599,22 +915,23 @@ export const CompaniesView: React.FC<CompaniesViewProps> = ({
                             type="button"
                             onClick={() => {
                               onSelectCompany(c.id);
-                              onNavigate('interviews');
+                              onNavigate('workers');
                             }}
-                            className="text-xs font-medium text-[#15803D] hover:underline whitespace-nowrap cursor-pointer"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-[#0B1E3B] hover:text-[#15803D] hover:underline whitespace-nowrap cursor-pointer"
                           >
-                            Entrevistas
+                            <Users className="h-3.5 w-3.5" />
+                            <span>Trabajadores</span>
                           </button>
                           <span className="text-slate-300">|</span>
                           <button
                             type="button"
                             onClick={() => {
                               onSelectCompany(c.id);
-                              onNavigate('diagnostic');
+                              onNavigate('interviews');
                             }}
-                            className="text-xs font-medium text-[#0B1E3B] hover:underline whitespace-nowrap cursor-pointer"
+                            className="text-xs font-medium text-[#15803D] hover:underline whitespace-nowrap cursor-pointer"
                           >
-                            Diagnóstico
+                            Entrevistas
                           </button>
                           <button
                             type="button"

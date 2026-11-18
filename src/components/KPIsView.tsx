@@ -25,7 +25,7 @@ const AREAS: Array<'Todas' | KPIArea> = [
   'Todas',
   'Compras y Abastecimiento',
   'Almacenamiento e Inventarios',
-  'Producción',
+  'Preparación de Pedidos y Operaciones',
   'Transporte y Distribución',
   'Servicio al Cliente',
   'Financieros',
@@ -158,7 +158,7 @@ export const KPIsView: React.FC<KPIsViewProps> = ({
             onClick={() => setOnlyAlerts(!onlyAlerts)}
             className="rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 cursor-pointer"
           >
-            {onlyAlerts ? 'Ver todos los 21 KPIs' : 'Filtrar solo alertas'}
+            {onlyAlerts ? `Ver todos los ${kpis.length} KPIs` : 'Filtrar solo alertas'}
           </button>
         </div>
       )}
@@ -316,6 +316,65 @@ export const KPIsView: React.FC<KPIsViewProps> = ({
           );
         })}
       </div>
+
+      {/* Historial de Resultados por Mes */}
+      {periods.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="border-b border-slate-200 px-5 py-4">
+            <h3 className="font-display text-base font-bold text-[#0B1E3B]">
+              Historial Comparativo de Resultados por Periodo
+            </h3>
+            <p className="text-xs text-slate-500">
+              Evolución histórica mes a mes de cada indicador frente a su meta actual.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                <tr>
+                  <th className="px-4 py-2.5">Indicador</th>
+                  <th className="px-3 py-2.5">Meta</th>
+                  {periods.map((p) => (
+                    <th key={p} className="px-3 py-2.5 text-right whitespace-nowrap">
+                      {formatPeriodLabel(p)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visibleKpis.map((refKpi) => (
+                  <tr key={refKpi.id} className="hover:bg-slate-50/70">
+                    <td className="px-4 py-2.5 font-medium text-slate-800">{refKpi.name}</td>
+                    <td className="px-3 py-2.5 font-mono text-slate-500">{refKpi.formattedTarget}</td>
+                    {periods.map((p) => {
+                      const rec = metrics.find((m) => m.period === p);
+                      const monthKpi = rec
+                        ? calculateKPIs([rec], customTargets).find((x) => x.id === refKpi.id)
+                        : undefined;
+                      return (
+                        <td
+                          key={p}
+                          className={`px-3 py-2.5 text-right font-mono tabular-nums ${
+                            monthKpi?.status === 'cumple'
+                              ? 'text-[#15803D] font-semibold'
+                              : monthKpi?.status === 'alerta'
+                              ? 'text-amber-700 font-semibold'
+                              : monthKpi?.status === 'critico'
+                              ? 'text-red-600 font-semibold'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {monthKpi && monthKpi.value !== null ? monthKpi.formattedValue : 'Sin datos'}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

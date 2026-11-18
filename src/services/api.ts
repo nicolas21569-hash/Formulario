@@ -5,6 +5,8 @@ import {
   DiagnosticSummary,
   Interview,
   KPIResult,
+  Worker,
+  WorkerInterview,
   WorkspaceData,
 } from '../types/domain';
 import { generateId } from '../utils/formatters';
@@ -12,9 +14,13 @@ import { generateId } from '../utils/formatters';
 const LOCAL_STORAGE_KEY = 'diagnostico_empresarial_workspace_v1';
 
 export const EMPTY_WORKSPACE: WorkspaceData = {
+  schemaVersion: 2,
   companies: [],
+  workers: [],
   interviews: [],
+  workerInterviews: [],
   metrics: [],
+  diagnosticProblems: [],
   improvementPlans: [],
   aiReports: [],
   customTargets: {},
@@ -24,21 +30,52 @@ export const EMPTY_WORKSPACE: WorkspaceData = {
 };
 
 function normalizeWorkspace(data: WorkspaceData): WorkspaceData {
+  // Smooth migration to v2: add "workers" tab if missing and upgrade old default Section F title
+  const rawTabs = Array.isArray(data.pageConfig?.sidebarTabs)
+    ? data.pageConfig.sidebarTabs
+    : DEFAULT_SIDEBAR_TABS;
+
+  let migratedTabs = [...rawTabs];
+  if ((data.schemaVersion ?? 1) < 2 && !migratedTabs.some((t) => t.id === 'workers')) {
+    const idx = migratedTabs.findIndex((t) => t.id === 'interviews');
+    const workersTab = DEFAULT_SIDEBAR_TABS.find((t) => t.id === 'workers')!;
+    if (idx >= 0) {
+      migratedTabs = [
+        ...migratedTabs.slice(0, idx + 1),
+        workersTab,
+        ...migratedTabs.slice(idx + 1),
+      ];
+    } else {
+      migratedTabs.push(workersTab);
+    }
+  }
+
+  let sections =
+    Array.isArray(data.interviewSections) && data.interviewSections.length > 0
+      ? data.interviewSections
+      : INTERVIEW_SECTIONS;
+
+  if ((data.schemaVersion ?? 1) < 2) {
+    const hasOldSectionF = sections.some((s) => s.code === 'F' && s.title.includes('Producción u Operación'));
+    if (hasOldSectionF) {
+      sections = INTERVIEW_SECTIONS;
+    }
+  }
+
   const mergedPageConfig = {
     ...DEFAULT_PAGE_CONFIG,
     ...(data.pageConfig ?? {}),
-    sidebarTabs: Array.isArray(data.pageConfig?.sidebarTabs)
-      ? data.pageConfig.sidebarTabs
-      : DEFAULT_SIDEBAR_TABS,
+    sidebarTabs: migratedTabs,
   };
 
   return {
     ...EMPTY_WORKSPACE,
     ...data,
-    interviewSections:
-      Array.isArray(data.interviewSections) && data.interviewSections.length > 0
-        ? data.interviewSections
-        : INTERVIEW_SECTIONS,
+    schemaVersion: 2,
+    workers: Array.isArray(data.workers) ? data.workers : [],
+    workerInterviews: Array.isArray(data.workerInterviews) ? data.workerInterviews : [],
+    diagnosticProblems: Array.isArray(data.diagnosticProblems) ? data.diagnosticProblems : [],
+    interviewSections: sections,
     pageConfig: mergedPageConfig,
     customTabContents:
       data.customTabContents && typeof data.customTabContents === 'object'
@@ -102,6 +139,8 @@ export async function persistWorkspace(data: WorkspaceData): Promise<void> {
 export async function requestAIAnalysis(params: {
   company: Company;
   interview: Interview | null;
+  workers: Worker[];
+  workerInterviews: WorkerInterview[];
   kpis: KPIResult[];
   diagnostic: DiagnosticSummary;
   periodLabel: string;

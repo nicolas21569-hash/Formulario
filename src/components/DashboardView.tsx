@@ -39,7 +39,7 @@ interface DashboardViewProps {
 const AREAS: KPIArea[] = [
   'Compras y Abastecimiento',
   'Almacenamiento e Inventarios',
-  'Producción',
+  'Preparación de Pedidos y Operaciones',
   'Transporte y Distribución',
   'Servicio al Cliente',
   'Financieros',
@@ -58,7 +58,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const stats = useMemo(() => {
     const companiesCount = workspace.companies.length;
-    const interviewsCount = workspace.interviews.length;
+    const interviewsCount = workspace.interviews.length + (workspace.workerInterviews?.length ?? 0);
+    const workersCount = workspace.workers?.length ?? 0;
     const completedDiagnostics = workspace.companies.filter((c) => {
       const hasCompletedInterview = workspace.interviews.some(
         (i) => i.companyId === c.id && i.status === 'completada'
@@ -74,8 +75,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     for (const c of workspace.companies) {
       const cMetrics = workspace.metrics.filter((m) => m.companyId === c.id);
       const cInterviews = workspace.interviews.filter((i) => i.companyId === c.id);
+      const cWorkers = (workspace.workers ?? []).filter((w) => w.companyId === c.id);
+      const cWI = (workspace.workerInterviews ?? []).filter((wi) => wi.companyId === c.id);
       const kpis = calculateKPIs(cMetrics, workspace.customTargets[c.id]);
-      const diag = generateDiagnosticSummary(c.id, cInterviews, kpis);
+      const diag = generateDiagnosticSummary(c.id, cInterviews, kpis, cWI, cWorkers);
 
       totalProcessesIdentified += diag.processes.filter(
         (p) => p.status !== 'Sin evaluar' && p.status !== 'No aplica'
@@ -94,6 +97,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return {
       companiesCount,
       interviewsCount,
+      workersCount,
       completedDiagnostics,
       totalProcessesIdentified,
       totalCalculatedKpis,
@@ -122,7 +126,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             )
           : 0;
       return {
-        area: area.replace(' y Abastecimiento', '').replace(' e Inventarios', '').replace(' y Distribución', ''),
+        area: area
+          .replace(' y Abastecimiento', '')
+          .replace(' e Inventarios', '')
+          .replace(' y Operaciones', '')
+          .replace(' y Distribución', ''),
         fullArea: area,
         cumplimiento: avg,
       };
@@ -214,9 +222,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-medium text-slate-500">Entrevistas realizadas</p>
+          <p className="text-xs font-medium text-slate-500">Entrevistas · Trabajadores</p>
           <p className="mt-2 font-mono text-2xl font-semibold text-[#0B1E3B] tabular-nums">
-            {stats.interviewsCount}
+            {stats.interviewsCount} <span className="text-sm font-normal text-slate-500">/ {stats.workersCount} trab.</span>
           </p>
         </div>
 
@@ -267,7 +275,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             Comience su primer diagnóstico empresarial
           </h3>
           <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
-            No hay empresas registradas todavía. Registre una empresa real para iniciar entrevistas, capturar datos de los últimos tres meses, calcular automáticamente sus 21 indicadores y generar su informe PDF. Si prefiere explorar primero, puede cargar el ejemplo demostrativo claramente etiquetado.
+            No hay empresas registradas todavía. Registre una empresa real para iniciar entrevistas por área y por trabajador, capturar datos de los últimos tres meses, calcular automáticamente sus indicadores KPI y generar informes PDF y Excel. Si prefiere explorar primero, puede cargar el ejemplo demostrativo claramente etiquetado.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <button
@@ -375,7 +383,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <div className="rounded-xl border border-slate-200 bg-white p-5">
                 <h3 className="font-display text-base font-semibold text-[#0B1E3B]">
-                  Estado de los 21 Indicadores
+                  Estado de los {activeCompanyAnalysis.kpis.length} Indicadores
                 </h3>
                 <p className="text-xs text-slate-500 mb-3">Distribución según meta establecida</p>
                 <div className="h-52 w-full">
@@ -467,7 +475,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {cInt.length}
                         </td>
                         <td className="px-4 py-3 text-right font-mono tabular-nums text-slate-800">
-                          {calcCount}/21
+                          {calcCount}/{cKpis.length}
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums">
                           {comp !== null ? (

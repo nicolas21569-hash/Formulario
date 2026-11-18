@@ -55,22 +55,24 @@ const FIELD_GROUPS: FieldGroup[] = [
     ],
   },
   {
-    title: 'Inventarios y Conteos Físicos',
-    subtitle: 'Saldos inicial/final y resultados de verificación física de referencias.',
+    title: 'Inventarios, Vencimientos y Conteos Físicos',
+    subtitle: 'Saldos inicial/final, productos vencidos dados de baja y verificación física de referencias.',
     fields: [
       { key: 'initialInventory', label: 'Inventario inicial', unit: '$' },
       { key: 'finalInventory', label: 'Inventario final', unit: '$' },
+      { key: 'expiredGoodsValue', label: 'Valor de productos vencidos', unit: '$' },
       { key: 'inventoryReferencesChecked', label: 'Referencias evaluadas en conteo', unit: 'SKUs' },
       { key: 'inventoryReferencesAccurate', label: 'Referencias sin diferencias', unit: 'SKUs' },
     ],
   },
   {
-    title: 'Producción, Talento Humano y Servicio al Cliente',
-    subtitle: 'Unidades producidas, horas laboradas, personal y satisfacción.',
+    title: 'Preparación de Pedidos, Operaciones y Servicio al Cliente',
+    subtitle: 'Pedidos preparados, errores/daños, horas de alistamiento, personal y satisfacción.',
     fields: [
-      { key: 'unitsProduced', label: 'Unidades producidas', unit: 'und' },
-      { key: 'defectiveUnits', label: 'Unidades defectuosas', unit: 'und' },
-      { key: 'hoursWorked', label: 'Horas trabajadas', unit: 'horas' },
+      { key: 'unitsProduced', label: 'Pedidos / unidades preparadas', unit: 'ped/und' },
+      { key: 'defectiveUnits', label: 'Pedidos con error o empaque dañado', unit: 'ped/und' },
+      { key: 'totalPreparationHours', label: 'Horas en preparación de pedidos', unit: 'horas' },
+      { key: 'hoursWorked', label: 'Horas totales trabajadas', unit: 'horas' },
       { key: 'workersCount', label: 'Número de trabajadores', unit: 'personas' },
       { key: 'customersServed', label: 'Clientes atendidos', unit: 'clientes' },
       { key: 'satisfiedCustomers', label: 'Clientes satisfechos', unit: 'clientes' },
@@ -98,6 +100,8 @@ function createEmptyRecord(companyId: string, period: string): MonthlyMetrics {
     totalDeliveryHours: null,
     unitsProduced: null,
     defectiveUnits: null,
+    totalPreparationHours: null,
+    expiredGoodsValue: null,
     returnsCount: null,
     claimsCount: null,
     customersServed: null,
@@ -180,7 +184,7 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
       ...form,
       updatedAt: new Date().toISOString(),
     });
-    setSavedNotice(`Datos de ${formatPeriodLabel(form.period)} guardados. Los 21 KPIs fueron recalculados.`);
+    setSavedNotice(`Datos de ${formatPeriodLabel(form.period)} guardados. Los indicadores KPI fueron recalculados.`);
     setTimeout(() => setSavedNotice(null), 4000);
   };
 
@@ -330,6 +334,78 @@ export const MetricsView: React.FC<MetricsViewProps> = ({
             </div>
           </div>
         </form>
+      )}
+
+      {metrics.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="border-b border-slate-200 px-5 py-3">
+            <h3 className="font-display text-sm font-semibold text-[#0B1E3B]">
+              Historial de Periodos Cargados ({metrics.length})
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                <tr>
+                  <th className="px-4 py-2.5">Mes</th>
+                  <th className="px-3 py-2.5 text-right">Pedidos Entreg. / Recib.</th>
+                  <th className="px-3 py-2.5 text-right">A Tiempo</th>
+                  <th className="px-3 py-2.5 text-right">Devoluciones</th>
+                  <th className="px-3 py-2.5 text-right">Ventas</th>
+                  <th className="px-3 py-2.5 text-right">Prod. Vencidos</th>
+                  <th className="px-4 py-2.5 text-right">Trabajadores</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {[...metrics]
+                  .sort((a, b) => a.period.localeCompare(b.period))
+                  .map((m) => (
+                    <tr key={m.id} className="hover:bg-slate-50/70">
+                      <td className="px-4 py-2.5 font-medium text-[#0B1E3B]">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPeriod(m.period)}
+                          className="hover:underline cursor-pointer"
+                        >
+                          {formatPeriodLabel(m.period)}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {m.totalOrdersDelivered ?? '—'} / {m.totalOrdersReceived ?? '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {m.ordersDeliveredOnTime ?? '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {m.returnsCount ?? '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {m.totalSalesValue !== null
+                          ? new Intl.NumberFormat('es-CO', {
+                              style: 'currency',
+                              currency: 'COP',
+                              maximumFractionDigits: 0,
+                            }).format(m.totalSalesValue)
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                        {m.expiredGoodsValue !== null && m.expiredGoodsValue !== undefined
+                          ? new Intl.NumberFormat('es-CO', {
+                              style: 'currency',
+                              currency: 'COP',
+                              maximumFractionDigits: 0,
+                            }).format(m.expiredGoodsValue)
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums">
+                        {m.workersCount ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Check, Edit3, ListChecks, Plus, Trash2, X } from 'lucide-react';
-import { ActionStatus, Company, ImprovementAction } from '../types/domain';
+import { ActionStatus, Company, ImprovementAction, Worker } from '../types/domain';
 import { generateId } from '../utils/formatters';
 import { NavSection } from './Sidebar';
 
 interface ImprovementPlanViewProps {
   company: Company | undefined;
+  workers: Worker[];
   plans: ImprovementAction[];
   onSavePlan: (action: ImprovementAction) => void;
   onDeletePlan: (id: string) => void;
@@ -30,6 +31,7 @@ const EMPTY_ACTION = {
 
 export const ImprovementPlanView: React.FC<ImprovementPlanViewProps> = ({
   company,
+  workers,
   plans,
   onSavePlan,
   onDeletePlan,
@@ -39,11 +41,19 @@ export const ImprovementPlanView: React.FC<ImprovementPlanViewProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_ACTION);
   const [statusFilter, setStatusFilter] = useState<'Todos' | ActionStatus>('Todos');
+  const [areaFilter, setAreaFilter] = useState<string>('Todas');
+  const [workerFilter, setWorkerFilter] = useState<string>('Todos');
 
   const filteredPlans = useMemo(() => {
-    if (statusFilter === 'Todos') return plans;
-    return plans.filter((p) => p.status === statusFilter);
-  }, [plans, statusFilter]);
+    return plans.filter((p) => {
+      if (statusFilter !== 'Todos' && p.status !== statusFilter) return false;
+      if (areaFilter !== 'Todas' && p.responsibleArea !== areaFilter) return false;
+      if (workerFilter !== 'Todos' && !p.responsiblePerson.toLowerCase().includes(workerFilter.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
+  }, [plans, statusFilter, areaFilter, workerFilter]);
 
   const progressSummary = useMemo(() => {
     if (plans.length === 0) return { completed: 0, pct: 0 };
@@ -186,7 +196,7 @@ export const ImprovementPlanView: React.FC<ImprovementPlanViewProps> = ({
                 <option>Compras y Abastecimiento</option>
                 <option>Recepción de Mercancías</option>
                 <option>Almacenamiento e Inventarios</option>
-                <option>Producción u Operación</option>
+                <option>Preparación de Pedidos y Operaciones</option>
                 <option>Transporte y Distribución</option>
                 <option>Ventas y Servicio al Cliente</option>
                 <option>Administración y Finanzas</option>
@@ -246,11 +256,20 @@ export const ImprovementPlanView: React.FC<ImprovementPlanViewProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-1">Responsable</label>
               <input
                 type="text"
+                list="plan-workers-datalist"
                 value={form.responsiblePerson}
                 onChange={(e) => setForm({ ...form, responsiblePerson: e.target.value })}
-                placeholder="Ej. Coordinador Logístico"
+                placeholder="Seleccione trabajador o escriba cargo"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
               />
+              <datalist id="plan-workers-datalist">
+                {workers.map((w) => (
+                  <option key={w.id} value={`${w.fullName} (${w.role})`} />
+                ))}
+                {company.representativeName && (
+                  <option value={`${company.representativeName} (Rep. Legal)`} />
+                )}
+              </datalist>
             </div>
 
             <div>
@@ -327,22 +346,54 @@ export const ImprovementPlanView: React.FC<ImprovementPlanViewProps> = ({
         </form>
       )}
 
-      {/* Status Filter */}
-      <div className="flex flex-wrap items-center gap-2">
-        {(['Todos', ...STATUS_OPTIONS] as const).map((st) => (
-          <button
-            key={st}
-            type="button"
-            onClick={() => setStatusFilter(st)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-              statusFilter === st
-                ? 'bg-[#0B1E3B] text-white'
-                : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
+      {/* Status, Area & Worker Filters */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {(['Todos', ...STATUS_OPTIONS] as const).map((st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setStatusFilter(st)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                statusFilter === st
+                  ? 'bg-[#0B1E3B] text-white'
+                  : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={areaFilter}
+            onChange={(e) => setAreaFilter(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
           >
-            {st}
-          </button>
-        ))}
+            <option value="Todas">Todas las áreas</option>
+            {Array.from(new Set(plans.map((p) => p.responsibleArea))).map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+
+          {workers.length > 0 && (
+            <select
+              value={workerFilter}
+              onChange={(e) => setWorkerFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+            >
+              <option value="Todos">Todos los responsables</option>
+              {workers.map((w) => (
+                <option key={w.id} value={w.fullName}>
+                  {w.fullName}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
 
       {/* Editable Table */}

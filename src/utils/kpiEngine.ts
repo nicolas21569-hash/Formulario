@@ -8,6 +8,8 @@ export const DEFAULT_KPI_TARGETS: Record<string, number> = {
   exactitud_inventario: 98,
   nivel_faltantes: 2,
   costo_almacenamiento: 5,
+  porcentaje_vencidos: 1,
+  productividad_trabajador: 25,
   productividad_laboral: 10,
   productos_defectuosos: 2,
   porcentaje_desperdicios: 1.5,
@@ -41,6 +43,8 @@ export interface AggregateMetrics {
   totalDeliveryHours: number | null;
   unitsProduced: number | null;
   defectiveUnits: number | null;
+  totalPreparationHours: number | null;
+  expiredGoodsValue: number | null;
   returnsCount: number | null;
   claimsCount: number | null;
   customersServed: number | null;
@@ -92,6 +96,8 @@ export function aggregateMonthlyMetrics(records: MonthlyMetrics[]): AggregateMet
     totalDeliveryHours: sumNullable(sorted.map((m) => m.totalDeliveryHours)),
     unitsProduced: sumNullable(sorted.map((m) => m.unitsProduced)),
     defectiveUnits: sumNullable(sorted.map((m) => m.defectiveUnits)),
+    totalPreparationHours: sumNullable(sorted.map((m) => m.totalPreparationHours)),
+    expiredGoodsValue: sumNullable(sorted.map((m) => m.expiredGoodsValue)),
     returnsCount: sumNullable(sorted.map((m) => m.returnsCount)),
     claimsCount: sumNullable(sorted.map((m) => m.claimsCount)),
     customersServed: sumNullable(sorted.map((m) => m.customersServed)),
@@ -169,18 +175,18 @@ const KPI_SPECS: KPISpec[] = [
         : status === 'cumple'
         ? {
             interpretation: `El ${fmtNum(v!)}% de las órdenes de compra llegaron puntualmente, superando la meta del ${t}%.`,
-            recommendation: 'Mantener acuerdos de nivel de servicio (SLA) y consolidar alianzas con proveedores clave.',
+            recommendation: 'Mantener acuerdos de nivel de servicio (SLA) y exigencia de vida útil mínima en lotes.',
           }
         : {
             interpretation: `El cumplimiento de proveedores (${fmtNum(v!)}%) está por debajo de la meta (${t}%), generando riesgo de desabastecimiento.`,
-            recommendation: 'Implementar evaluación trimestral de proveedores, penalidades por retraso y desarrollar proveedores alternos.',
+            recommendation: 'Implementar evaluación trimestral de proveedores y desarrollar proveedores alternos de concentrados y accesorios.',
           },
   },
   {
     id: 'costo_compras',
     name: 'Costo de compras',
     area: 'Compras y Abastecimiento',
-    objective: 'Evaluar la proporción de los ingresos por ventas que se destina a la adquisición de insumos o mercancías.',
+    objective: 'Evaluar la proporción de los ingresos por ventas destinada a la adquisición de alimentos y productos para mascotas.',
     formula: '(Valor total de compras / Valor total de ventas) × 100',
     unit: '%',
     higherIsBetter: false,
@@ -206,14 +212,14 @@ const KPI_SPECS: KPISpec[] = [
           }
         : {
             interpretation: `Las compras representan el ${fmtNum(v!)}% de las ventas, superando el máximo esperado (${t}%).`,
-            recommendation: 'Renegociar tarifas con proveedores, consolidar pedidos y revisar compras urgentes o sobreabastecimiento.',
+            recommendation: 'Renegociar tarifas con distribuidores, evitar compras urgentes y ajustar lotes según rotación real.',
           },
   },
   {
     id: 'tiempo_abastecimiento',
     name: 'Tiempo promedio de abastecimiento',
     area: 'Compras y Abastecimiento',
-    objective: 'Determinar los días promedio transcurridos desde la emisión de la orden hasta la recepción.',
+    objective: 'Determinar los días promedio transcurridos desde la emisión de la orden hasta la recepción en bodega.',
     formula: 'Días totales de abastecimiento / Compras realizadas',
     unit: 'días',
     higherIsBetter: false,
@@ -239,7 +245,7 @@ const KPI_SPECS: KPISpec[] = [
           }
         : {
             interpretation: `El tiempo promedio de abastecimiento (${fmtNum(v!)} días) excede la meta de ${t} días.`,
-            recommendation: 'Pre-acordar entregas programadas, usar órdenes abiertas y diversificar proveedores locales.',
+            recommendation: 'Pre-acordar entregas programadas, usar órdenes abiertas y diversificar proveedores regionales.',
           },
   },
 
@@ -248,7 +254,7 @@ const KPI_SPECS: KPISpec[] = [
     id: 'rotacion_inventarios',
     name: 'Rotación de inventarios',
     area: 'Almacenamiento e Inventarios',
-    objective: 'Medir cuántas veces se renueva el inventario durante el periodo analizado.',
+    objective: 'Medir cuántas veces se renueva el inventario de alimentos y productos durante el periodo analizado.',
     formula: 'Costo de ventas / ((Inventario inicial + Inventario final) / 2)',
     unit: 'veces',
     higherIsBetter: true,
@@ -277,19 +283,19 @@ const KPI_SPECS: KPISpec[] = [
           }
         : status === 'cumple'
         ? {
-            interpretation: `El inventario rotó ${fmtNum(v!, 2)} veces en el periodo, superando la meta de ${t} veces.`,
-            recommendation: 'Vigilar niveles de stock de seguridad para evitar quiebres ante picos de demanda.',
+            interpretation: `El inventario rotó ${fmtNum(v!, 2)} veces en el periodo, superando la meta de ${t} veces y reduciendo riesgo de vencimiento.`,
+            recommendation: 'Vigilar stock de seguridad por categoría y mantener salida estricta FEFO.',
           }
         : {
-            interpretation: `La rotación (${fmtNum(v!, 2)} veces) es inferior a la meta (${t}), evidenciando capital inmovilizado.`,
-            recommendation: 'Aplicar clasificación ABC, liquidar inventario de baja rotación y ajustar lotes de compra.',
+            interpretation: `La rotación (${fmtNum(v!, 2)} veces) es inferior a la meta (${t}), aumentando el riesgo de vencimiento de alimentos.`,
+            recommendation: 'Aplicar clasificación ABC, impulsar promociones de baja rotación y ajustar tamaños de compra.',
           },
   },
   {
     id: 'exactitud_inventario',
     name: 'Exactitud del inventario',
     area: 'Almacenamiento e Inventarios',
-    objective: 'Verificar la confiabilidad entre el inventario físico y el registrado en el sistema.',
+    objective: 'Verificar la confiabilidad entre el inventario físico en bodega y el registrado en el sistema.',
     formula: '(Referencias sin diferencias / Referencias evaluadas) × 100',
     unit: '%',
     higherIsBetter: true,
@@ -315,11 +321,44 @@ const KPI_SPECS: KPISpec[] = [
         : status === 'cumple'
         ? {
             interpretation: `La confiabilidad del inventario es del ${fmtNum(v!)}%, cumpliendo el estándar (≥ ${t}%).`,
-            recommendation: 'Mantener conteos cíclicos y control estricto de entradas y salidas.',
+            recommendation: 'Mantener conteos cíclicos y control estricto de entradas y salidas por lote.',
           }
         : {
             interpretation: `La exactitud del inventario (${fmtNum(v!)}%) está por debajo de la meta (${t}%).`,
-            recommendation: 'Implementar conteos cíclicos semanales, control de acceso a bodega y registro en línea de movimientos.',
+            recommendation: 'Implementar conteos cíclicos semanales, codificación de estanterías y registro inmediato de bajas.',
+          },
+  },
+  {
+    id: 'porcentaje_vencidos',
+    name: 'Porcentaje de productos vencidos',
+    area: 'Almacenamiento e Inventarios',
+    objective: 'Cuantificar el porcentaje del inventario final perdido por caducidad de alimentos, snacks o medicamentos.',
+    formula: '(Valor de productos vencidos / Inventario final) × 100',
+    unit: '%',
+    higherIsBetter: false,
+    compute: (m) => {
+      if (!isValidNumber(m.expiredGoodsValue) || !isValidNumber(m.finalInventory) || m.finalInventory <= 0) {
+        return { value: null, dataUsed: 'Falta valor de productos vencidos o inventario final.' };
+      }
+      return {
+        value: (m.expiredGoodsValue / m.finalInventory) * 100,
+        dataUsed: `Vencidos: ${fmtMoney(m.expiredGoodsValue)} / Inv. final: ${fmtMoney(m.finalInventory)}`,
+      };
+    },
+    interpret: (status, v, t) =>
+      status === 'insuficiente'
+        ? {
+            interpretation: 'Información insuficiente para calcular.',
+            recommendation: 'Registre el valor de los productos vencidos dados de baja y el inventario final del periodo.',
+          }
+        : status === 'cumple'
+        ? {
+            interpretation: `Los productos vencidos representan el ${fmtNum(v!, 2)}% del inventario final, dentro del umbral aceptable (≤ ${t}%).`,
+            recommendation: 'Continuar con rotación FEFO, alertas tempranas a 60 días y negociación de cambios con proveedores.',
+          }
+        : {
+            interpretation: `Los vencimientos alcanzan el ${fmtNum(v!, 2)}% del inventario final, superando la meta máxima (${t}%).`,
+            recommendation: 'Implantar método FEFO obligatorio, semáforo de vencimientos y control de vida útil mínima en recepción.',
           },
   },
   {
@@ -352,7 +391,7 @@ const KPI_SPECS: KPISpec[] = [
           }
         : {
             interpretation: `El ${fmtNum(v!)}% de los pedidos presenta faltantes o errores, superando el tope del ${t}%.`,
-            recommendation: 'Establecer stocks de seguridad para productos A y listas de chequeo previas al despacho.',
+            recommendation: 'Establecer stocks de seguridad para referencias de alta rotación y listas de chequeo previas al despacho.',
           },
   },
   {
@@ -381,7 +420,7 @@ const KPI_SPECS: KPISpec[] = [
         : status === 'cumple'
         ? {
             interpretation: `El costo de almacenamiento representa el ${fmtNum(v!)}% de las ventas, cumpliendo la meta (≤ ${t}%).`,
-            recommendation: 'Preservar la optimización del espacio y evitar sobrestock estacional.',
+            recommendation: 'Preservar la optimización del espacio estibado y evitar sobrestock.',
           }
         : {
             interpretation: `El almacenamiento consume el ${fmtNum(v!)}% de las ventas, superando el objetivo (${t}%).`,
@@ -389,137 +428,173 @@ const KPI_SPECS: KPISpec[] = [
           },
   },
 
-  // 3. PRODUCCIÓN
+  // 3. PREPARACIÓN DE PEDIDOS Y OPERACIONES INTERNAS
   {
-    id: 'productividad_laboral',
-    name: 'Productividad laboral',
-    area: 'Producción',
-    objective: 'Medir el volumen de unidades generadas por cada hora trabajada en operación.',
-    formula: 'Unidades producidas / Horas trabajadas',
-    unit: 'und/h',
+    id: 'productividad_trabajador',
+    name: 'Productividad por trabajador',
+    area: 'Preparación de Pedidos y Operaciones',
+    objective: 'Evaluar la cantidad promedio de pedidos despachados por cada trabajador operativo en el periodo.',
+    formula: 'Total de pedidos entregados / Número de trabajadores',
+    unit: 'ped/trab',
     higherIsBetter: true,
     compute: (m) => {
-      if (!isValidNumber(m.unitsProduced) || !isValidNumber(m.hoursWorked) || m.hoursWorked <= 0) {
-        return { value: null, dataUsed: 'Faltan unidades producidas u horas trabajadas.' };
+      if (!isValidNumber(m.totalOrdersDelivered) || !isValidNumber(m.workersCount) || m.workersCount <= 0) {
+        return { value: null, dataUsed: 'Falta total de pedidos entregados o número promedio de trabajadores.' };
       }
       return {
-        value: m.unitsProduced / m.hoursWorked,
-        dataUsed: `Unidades: ${m.unitsProduced} / Horas: ${m.hoursWorked}`,
+        value: m.totalOrdersDelivered / m.workersCount,
+        dataUsed: `Entregados: ${m.totalOrdersDelivered} / Trabajadores: ${fmtNum(m.workersCount, 1)}`,
       };
     },
     interpret: (status, v, t) =>
       status === 'insuficiente'
         ? {
             interpretation: 'Información insuficiente para calcular.',
-            recommendation: 'Registre unidades producidas (o atendidas) y horas hombre trabajadas.',
+            recommendation: 'Registre el total de pedidos entregados y el número de trabajadores operativos.',
           }
         : status === 'cumple'
         ? {
-            interpretation: `Se producen ${fmtNum(v!, 2)} unidades por hora trabajada, superando la meta de ${t} und/h.`,
-            recommendation: 'Documentar métodos estándar y capacitar al personal nuevo en mejores prácticas.',
+            interpretation: `Cada trabajador aporta en promedio ${fmtNum(v!, 1)} pedidos entregados, superando la meta de ${t} ped/trab.`,
+            recommendation: 'Documentar flujos de alistamiento estándar y mantener balance de cargas por área.',
           }
         : {
-            interpretation: `La productividad (${fmtNum(v!, 2)} und/h) está por debajo de la meta (${t} und/h).`,
-            recommendation: 'Analizar tiempos improductivos, balancear cargas de trabajo y eliminar cuellos de botella.',
+            interpretation: `La productividad por trabajador (${fmtNum(v!, 1)} ped/trab) está debajo de la meta (${t} ped/trab).`,
+            recommendation: 'Eliminar tiempos de búsqueda en bodega, redefinir funciones claras y estandarizar rutas internas.',
+          },
+  },
+  {
+    id: 'productividad_laboral',
+    name: 'Productividad en preparación de pedidos',
+    area: 'Preparación de Pedidos y Operaciones',
+    objective: 'Medir el volumen de pedidos o unidades preparadas por cada hora trabajada en operaciones internas.',
+    formula: 'Pedidos/unidades preparadas / Horas de preparación (o trabajadas)',
+    unit: 'und/h',
+    higherIsBetter: true,
+    compute: (m) => {
+      const hours = isValidNumber(m.totalPreparationHours) && m.totalPreparationHours > 0
+        ? m.totalPreparationHours
+        : m.hoursWorked;
+      if (!isValidNumber(m.unitsProduced) || !isValidNumber(hours) || hours <= 0) {
+        return { value: null, dataUsed: 'Faltan pedidos/unidades preparadas u horas de preparación/trabajadas.' };
+      }
+      return {
+        value: m.unitsProduced / hours,
+        dataUsed: `Preparados: ${m.unitsProduced} / Horas: ${hours}`,
+      };
+    },
+    interpret: (status, v, t) =>
+      status === 'insuficiente'
+        ? {
+            interpretation: 'Información insuficiente para calcular.',
+            recommendation: 'Registre pedidos o unidades preparadas y horas dedicadas a preparación u operación.',
+          }
+        : status === 'cumple'
+        ? {
+            interpretation: `Se preparan ${fmtNum(v!, 2)} unidades/pedidos por hora, superando la meta de ${t} und/h.`,
+            recommendation: 'Sostener listas de alistamiento digitales y ubicación ABC en bodega.',
+          }
+        : {
+            interpretation: `La productividad horaria en preparación (${fmtNum(v!, 2)} und/h) está por debajo de la meta (${t} und/h).`,
+            recommendation: 'Agrupar picking por zonas y reducir desplazamientos innecesarios en almacén.',
           },
   },
   {
     id: 'productos_defectuosos',
-    name: 'Porcentaje de productos defectuosos',
-    area: 'Producción',
-    objective: 'Determinar la tasa de no conformidad o falla de calidad sobre el total producido.',
-    formula: '(Unidades defectuosas / Unidades producidas) × 100',
+    name: 'Porcentaje de pedidos con error o daño',
+    area: 'Preparación de Pedidos y Operaciones',
+    objective: 'Determinar la tasa de errores en alistamiento, empaques rotos o averías sobre el total preparado.',
+    formula: '(Pedidos/unidades con error o daño / Total preparado) × 100',
     unit: '%',
     higherIsBetter: false,
     compute: (m) => {
       if (!isValidNumber(m.defectiveUnits) || !isValidNumber(m.unitsProduced) || m.unitsProduced <= 0) {
-        return { value: null, dataUsed: 'Faltan unidades defectuosas o unidades producidas.' };
+        return { value: null, dataUsed: 'Faltan pedidos/unidades con error o total preparado.' };
       }
       return {
         value: (m.defectiveUnits / m.unitsProduced) * 100,
-        dataUsed: `Defectuosas: ${m.defectiveUnits} / Producidas: ${m.unitsProduced}`,
+        dataUsed: `Con error/daño: ${m.defectiveUnits} / Preparados: ${m.unitsProduced}`,
       };
     },
     interpret: (status, v, t) =>
       status === 'insuficiente'
         ? {
             interpretation: 'Información insuficiente para calcular.',
-            recommendation: 'Registre las unidades producidas y las unidades defectuosas o rechazadas.',
+            recommendation: 'Registre los pedidos/unidades preparadas y los que presentaron errores o empaque dañado.',
           }
         : status === 'cumple'
         ? {
-            interpretation: `La tasa de defectos es del ${fmtNum(v!, 2)}%, dentro del estándar de calidad (≤ ${t}%).`,
-            recommendation: 'Mantener inspecciones preventivas en puntos críticos del proceso.',
+            interpretation: `La tasa de error o daño en preparación es del ${fmtNum(v!, 2)}%, dentro del estándar (≤ ${t}%).`,
+            recommendation: 'Mantener doble chequeo de referencia, lote y estado de bolsas/bultos antes de despacho.',
           }
         : {
-            interpretation: `Los defectos alcanzan el ${fmtNum(v!, 2)}%, superando el máximo permitido (${t}%).`,
-            recommendation: 'Implementar control de calidad en proceso, calibración de equipos y análisis causa raíz.',
+            interpretation: `Los errores/daños alcanzan el ${fmtNum(v!, 2)}%, superando el máximo permitido (${t}%).`,
+            recommendation: 'Implantar lista de verificación previa al cierre de empaque y capacitar en manipulación de bultos.',
           },
   },
   {
     id: 'porcentaje_desperdicios',
-    name: 'Porcentaje de desperdicios',
-    area: 'Producción',
-    objective: 'Medir el peso financiero de las pérdidas, mermas y desperdicios respecto a las ventas.',
-    formula: '(Valor de pérdidas y desperdicios / Valor total de ventas) × 100',
+    name: 'Porcentaje de mermas y averías',
+    area: 'Preparación de Pedidos y Operaciones',
+    objective: 'Medir el peso financiero de bultos rotos, mermas y pérdidas operativas respecto a las ventas.',
+    formula: '(Valor de pérdidas, mermas y averías / Valor total de ventas) × 100',
     unit: '%',
     higherIsBetter: false,
     compute: (m) => {
       if (!isValidNumber(m.wasteAndLossValue) || !isValidNumber(m.totalSalesValue) || m.totalSalesValue <= 0) {
-        return { value: null, dataUsed: 'Falta valor de pérdidas/desperdicios o valor total de ventas.' };
+        return { value: null, dataUsed: 'Falta valor de pérdidas/mermas o valor total de ventas.' };
       }
       return {
         value: (m.wasteAndLossValue / m.totalSalesValue) * 100,
-        dataUsed: `Desperdicios: ${fmtMoney(m.wasteAndLossValue)} / Ventas: ${fmtMoney(m.totalSalesValue)}`,
+        dataUsed: `Mermas/Averías: ${fmtMoney(m.wasteAndLossValue)} / Ventas: ${fmtMoney(m.totalSalesValue)}`,
       };
     },
     interpret: (status, v, t) =>
       status === 'insuficiente'
         ? {
             interpretation: 'Información insuficiente para calcular.',
-            recommendation: 'Cuantifique el valor económico de mermas, averías y desperdicios del periodo.',
+            recommendation: 'Cuantifique el valor económico de bultos rotos, mermas y pérdidas del periodo.',
           }
         : status === 'cumple'
         ? {
-            interpretation: `Las pérdidas y desperdicios representan el ${fmtNum(v!, 2)}% de las ventas (meta ≤ ${t}%).`,
-            recommendation: 'Continuar monitoreo de mermas y aprovechamiento de subproductos.',
+            interpretation: `Las mermas y averías representan el ${fmtNum(v!, 2)}% de las ventas (meta ≤ ${t}%).`,
+            recommendation: 'Continuar monitoreo de manipulación de sacos y control preventivo de plagas.',
           }
         : {
-            interpretation: `El desperdicio equivale al ${fmtNum(v!, 2)}% de las ventas, excediendo la meta (${t}%).`,
-            recommendation: 'Estandarizar dosificación/corte, mejorar manipulación y controlar vencimientos.',
+            interpretation: `Las mermas equivalen al ${fmtNum(v!, 2)}% de las ventas, excediendo la meta (${t}%).`,
+            recommendation: 'Proteger estanterías contra humedad y roedores, y estandarizar embalaje de sacos pesados.',
           },
   },
   {
     id: 'eficiencia_produccion',
-    name: 'Eficiencia de producción',
-    area: 'Producción',
-    objective: 'Calcular la proporción de producción conforme lograda sin defectos ni reprocesos.',
-    formula: '((Unidades producidas - Unidades defectuosas) / Unidades producidas) × 100',
+    name: 'Eficiencia en preparación de pedidos',
+    area: 'Preparación de Pedidos y Operaciones',
+    objective: 'Calcular la proporción de pedidos preparados correctamente a la primera sin reprocesos ni averías.',
+    formula: '((Total preparado - Con error o daño) / Total preparado) × 100',
     unit: '%',
     higherIsBetter: true,
     compute: (m) => {
       if (!isValidNumber(m.unitsProduced) || !isValidNumber(m.defectiveUnits) || m.unitsProduced <= 0) {
-        return { value: null, dataUsed: 'Faltan unidades producidas o defectuosas.' };
+        return { value: null, dataUsed: 'Faltan unidades/pedidos preparados o con error.' };
       }
       return {
         value: ((m.unitsProduced - m.defectiveUnits) / m.unitsProduced) * 100,
-        dataUsed: `Conformes: ${m.unitsProduced - m.defectiveUnits} / Producidas: ${m.unitsProduced}`,
+        dataUsed: `Perfectos: ${m.unitsProduced - m.defectiveUnits} / Preparados: ${m.unitsProduced}`,
       };
     },
     interpret: (status, v, t) =>
       status === 'insuficiente'
         ? {
             interpretation: 'Información insuficiente para calcular.',
-            recommendation: 'Ingrese las unidades producidas y defectuosas para calcular eficiencia neta.',
+            recommendation: 'Ingrese pedidos/unidades preparadas y los que tuvieron error para calcular eficiencia.',
           }
         : status === 'cumple'
         ? {
-            interpretation: `La eficiencia productiva neta es del ${fmtNum(v!)}%, superando la meta del ${t}%.`,
-            recommendation: 'Sostener mantenimientos preventivos y capacitación técnica continua.',
+            interpretation: `La eficiencia en preparación es del ${fmtNum(v!)}%, superando la meta del ${t}%.`,
+            recommendation: 'Sostener protocolo de alistamiento y verificación de lotes.',
           }
         : {
-            interpretation: `La eficiencia neta (${fmtNum(v!)}%) está debajo de la meta (${t}%) por defectos o reprocesos.`,
-            recommendation: 'Reducir paradas no programadas y reforzar validación de insumos al ingreso.',
+            interpretation: `La eficiencia (${fmtNum(v!)}%) está debajo de la meta (${t}%) por errores o daños en empaque.`,
+            recommendation: 'Implementar lectura de código de barras y zona diferenciada de verificación.',
           },
   },
 
@@ -550,11 +625,11 @@ const KPI_SPECS: KPISpec[] = [
         : status === 'cumple'
         ? {
             interpretation: `El ${fmtNum(v!)}% de las entregas se realizó a tiempo, cumpliendo la meta (≥ ${t}%).`,
-            recommendation: 'Mantener planeación anticipada de rutas y ventanas de entrega.',
+            recommendation: 'Mantener planeación anticipada de rutas y cortes horarios de alistamiento.',
           }
         : {
             interpretation: `Solo el ${fmtNum(v!)}% de las entregas fue puntual, por debajo de la meta (${t}%).`,
-            recommendation: 'Optimizar zonificación de rutas, adelantar alistamiento y monitorear tiempos en tránsito.',
+            recommendation: 'Optimizar zonificación de rutas, adelantar preparación nocturna y monitorear tiempos en ruta.',
           },
   },
   {
@@ -587,7 +662,7 @@ const KPI_SPECS: KPISpec[] = [
           }
         : {
             interpretation: `El costo por entrega (${fmtMoney(v!)}) supera el referente esperado (${fmtMoney(t)}).`,
-            recommendation: 'Consolidar despachos por ruta, reducir viajes con baja ocupación y revisar tarifas de fletes.',
+            recommendation: 'Consolidar despachos por zona, optimizar capacidad vehicular y negociar tarifas de fletes.',
           },
   },
   {
@@ -620,7 +695,7 @@ const KPI_SPECS: KPISpec[] = [
           }
         : {
             interpretation: `El cumplimiento de pedidos (${fmtNum(v!)}%) está por debajo de la meta (${t}%).`,
-            recommendation: 'Identificar pedidos represados por falta de stock o capacidad de transporte.',
+            recommendation: 'Identificar pedidos represados por quiebres de inventario o falta de vehículos.',
           },
   },
   {
@@ -653,7 +728,7 @@ const KPI_SPECS: KPISpec[] = [
           }
         : {
             interpretation: `Las entregas promedian ${fmtNum(v!)} horas, excediendo la meta de ${t} horas.`,
-            recommendation: 'Implementar cortes de despacho más frecuentes y pre-alistamiento nocturno.',
+            recommendation: 'Implementar cortes de despacho más frecuentes y pre-alistamiento anticipado.',
           },
   },
 
@@ -684,18 +759,18 @@ const KPI_SPECS: KPISpec[] = [
         : status === 'cumple'
         ? {
             interpretation: `El ${fmtNum(v!)}% de los clientes reporta satisfacción, superando la meta (${t}%).`,
-            recommendation: 'Implementar programas de fidelización y referidos.',
+            recommendation: 'Implementar programas de fidelización para veterinarias, pet shops y clientes recurrentes.',
           }
         : {
             interpretation: `La satisfacción (${fmtNum(v!)}%) está por debajo de la meta (${t}%).`,
-            recommendation: 'Atender causas raíz de insatisfacción (tiempos, calidad o trato) y mejorar seguimiento postventa.',
+            recommendation: 'Atender causas raíz de insatisfacción (vencimientos, bultos rotos o demoras).',
           },
   },
   {
     id: 'porcentaje_devoluciones',
-    name: 'Porcentaje de devoluciones',
+    name: 'Tasa de devoluciones',
     area: 'Servicio al Cliente',
-    objective: 'Medir la proporción de pedidos retornados por inconformidades, daños o errores.',
+    objective: 'Medir la proporción de pedidos retornados por vencimiento cercano, daño de empaque o error de despacho.',
     formula: '(Número de devoluciones / Total de pedidos entregados) × 100',
     unit: '%',
     higherIsBetter: false,
@@ -717,11 +792,11 @@ const KPI_SPECS: KPISpec[] = [
         : status === 'cumple'
         ? {
             interpretation: `La tasa de devoluciones es del ${fmtNum(v!, 2)}%, dentro del umbral óptimo (≤ ${t}%).`,
-            recommendation: 'Mantener verificación de empaque y confirmación previa del pedido.',
+            recommendation: 'Mantener verificación de empaque, lote y confirmación previa del pedido.',
           }
         : {
             interpretation: `Las devoluciones (${fmtNum(v!, 2)}%) superan el límite (${t}%), elevando costos de logística inversa.`,
-            recommendation: 'Clasificar motivos de devolución (avería, error de despacho, calidad) e intervenir el principal.',
+            recommendation: 'Clasificar motivos de devolución (avería, vencimiento, error de picking) e intervenir el principal.',
           },
   },
   {
@@ -785,11 +860,11 @@ const KPI_SPECS: KPISpec[] = [
         : status === 'cumple'
         ? {
             interpretation: `El margen bruto de utilidad es del ${fmtNum(v!)}%, cumpliendo la meta (≥ ${t}%).`,
-            recommendation: 'Proteger precios y mix de productos de mayor margen.',
+            recommendation: 'Proteger precios y mix de alimentos premium, snacks y accesorios de mayor margen.',
           }
         : {
             interpretation: `El margen bruto (${fmtNum(v!)}%) está por debajo de la meta (${t}%).`,
-            recommendation: 'Revisar estructura de costos directos, negociar compras y ajustar precios en líneas de bajo margen.',
+            recommendation: 'Revisar estructura de costos directos, negociar descuentos por volumen y evitar mermas por vencimiento.',
           },
   },
   {
@@ -828,11 +903,11 @@ const KPI_SPECS: KPISpec[] = [
         : status === 'cumple'
         ? {
             interpretation: `La rentabilidad sobre el costo operativo es del ${fmtNum(v!)}%, superando el objetivo (${t}%).`,
-            recommendation: 'Reinvertir excedentes en automatización y mejora logística.',
+            recommendation: 'Reinvertir excedentes en mejoras de trazabilidad, estantería y ruteo.',
           }
         : {
             interpretation: `La rentabilidad (${fmtNum(v!)}%) está por debajo de la meta (${t}%).`,
-            recommendation: 'Contener costos logísticos (bodegaje y transporte) e impulsar productos de mayor contribución.',
+            recommendation: 'Contener costos logísticos (bodegaje y fletes) e impulsar líneas de mayor contribución.',
           },
   },
   {
@@ -872,7 +947,7 @@ const KPI_SPECS: KPISpec[] = [
           }
         : {
             interpretation: `Los costos absorben el ${fmtNum(v!)}% de las ventas, superando el máximo esperado (${t}%).`,
-            recommendation: 'Ejecutar plan de reducción de costos en abastecimiento, mermas y fletes.',
+            recommendation: 'Ejecutar plan de reducción de costos en abastecimiento, vencimientos y fletes.',
           },
   },
 ];
@@ -881,7 +956,7 @@ export function formatKpiValue(value: number | null, unit: string): string {
   if (value === null || !Number.isFinite(value)) return 'Información insuficiente para calcular';
   if (unit === '$/entrega') return fmtMoney(value);
   if (unit === '%') return `${fmtNum(value, 1)}%`;
-  if (unit === 'veces' || unit === 'und/h') return `${fmtNum(value, 2)} ${unit}`;
+  if (unit === 'veces' || unit === 'und/h' || unit === 'ped/trab') return `${fmtNum(value, 2)} ${unit}`;
   return `${fmtNum(value, 1)} ${unit}`;
 }
 

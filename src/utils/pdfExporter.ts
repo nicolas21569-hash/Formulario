@@ -1,9 +1,14 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { DEFAULT_PAGE_CONFIG, INTERVIEW_SECTIONS } from '../data/interviewSchema';
+import {
+  DEFAULT_PAGE_CONFIG,
+  INTERVIEW_SECTIONS,
+  WORKER_INTERVIEW_QUESTIONS,
+} from '../data/interviewSchema';
 import {
   AIAnalysisReport,
   Company,
+  DiagnosticProblem,
   DiagnosticSummary,
   ImprovementAction,
   Interview,
@@ -12,6 +17,8 @@ import {
   KPIResult,
   MonthlyMetrics,
   PageConfig,
+  Worker,
+  WorkerInterview,
 } from '../types/domain';
 import { generateDiagnosticSummary } from './diagnosticEngine';
 import { formatPeriodLabel } from './formatters';
@@ -73,7 +80,7 @@ function drawVectorAreaChart(doc: jsPDF, kpis: KPIResult[], startY: number): num
   const areas: KPIArea[] = [
     'Compras y Abastecimiento',
     'Almacenamiento e Inventarios',
-    'Producción',
+    'Preparación de Pedidos y Operaciones',
     'Transporte y Distribución',
     'Servicio al Cliente',
     'Financieros',
@@ -97,14 +104,16 @@ function drawVectorAreaChart(doc: jsPDF, kpis: KPIResult[], startY: number): num
   doc.text('Gráfica Estadística: Nivel de Cumplimiento Promedio por Área (%)', 18, y + 8);
 
   let rowY = y + 17;
-  const barX = 80;
-  const maxBarW = 92;
+  const barX = 86;
+  const maxBarW = 86;
 
   for (const item of areaStats) {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setTextColor(30, 41, 59);
-    doc.text(item.area, 18, rowY + 3.5);
+    const shortLabel =
+      item.area === 'Preparación de Pedidos y Operaciones' ? 'Prep. Pedidos y Op.' : item.area;
+    doc.text(shortLabel, 18, rowY + 3.5);
 
     doc.setFillColor(226, 232, 240);
     doc.rect(barX, rowY, maxBarW, 4.5, 'F');
@@ -140,9 +149,12 @@ function getLastTableY(doc: jsPDF, fallback: number): number {
 
 export function exportCompanyReportPDF(params: {
   company: Company;
+  workers?: Worker[];
   interviews: Interview[];
+  workerInterviews?: WorkerInterview[];
   metrics: MonthlyMetrics[];
   plans: ImprovementAction[];
+  customProblems?: DiagnosticProblem[];
   aiReport?: AIAnalysisReport;
   customTargets?: Record<string, number>;
   customSections?: InterviewSection[];
@@ -150,9 +162,12 @@ export function exportCompanyReportPDF(params: {
 }): void {
   const {
     company,
+    workers = [],
     interviews,
+    workerInterviews = [],
     metrics,
     plans,
+    customProblems = [],
     aiReport,
     customTargets,
     customSections = INTERVIEW_SECTIONS,
@@ -160,7 +175,14 @@ export function exportCompanyReportPDF(params: {
   } = params;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const kpis = calculateKPIs(metrics, customTargets);
-  const diagnostic: DiagnosticSummary = generateDiagnosticSummary(company.id, interviews, kpis);
+  const diagnostic: DiagnosticSummary = generateDiagnosticSummary(
+    company.id,
+    interviews,
+    kpis,
+    workerInterviews,
+    workers,
+    customProblems
+  );
   const latestInterview = [...interviews].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
   const overall = getOverallCompliance(kpis);
 
@@ -171,7 +193,7 @@ export function exportCompanyReportPDF(params: {
   doc.rect(0, 95, 210, 4, 'F');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(10.5);
   doc.setTextColor(187, 247, 208);
   doc.text(
     pageConfig.pdfHeaderTitle || 'INFORME TÉCNICO DE DIAGNÓSTICO EMPRESARIAL Y GESTIÓN LOGÍSTICA',
@@ -179,27 +201,31 @@ export function exportCompanyReportPDF(params: {
     26
   );
 
-  doc.setFontSize(22);
+  doc.setFontSize(21);
   doc.setTextColor(255, 255, 255);
   const titleLines = doc.splitTextToSize(company.name, 178) as string[];
   doc.text(titleLines, 16, 44);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
+  doc.setFontSize(10.5);
   doc.setTextColor(226, 232, 240);
-  doc.text(`NIT: ${company.nit || 'No registrado'}  ·  Sector: ${company.sector}`, 16, 72);
-  doc.text(`Ciudad: ${company.city || 'No registrada'}  ·  Representante: ${company.representativeName || 'No registrado'}`, 16, 80);
+  doc.text(`NIT: ${company.nit || 'No registrado'}  ·  Sector: ${company.sector}`, 16, 70);
+  doc.text(
+    `Ciudad: ${company.city || 'No registrada'}  ·  Representante Legal: ${company.representativeName || 'No registrado'}`,
+    16,
+    78
+  );
 
   if (company.isDemo) {
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(253, 224, 71);
-    doc.text('DOCUMENTO GENERADO CON DATOS DE DEMOSTRACIÓN', 16, 89);
+    doc.text('DOCUMENTO GENERADO CON DATOS DE DEMOSTRACIÓN', 16, 88);
   }
 
-  let y = 115;
+  let y = 112;
   doc.setFillColor(...LIGHT_BG);
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(16, y, 178, 52, 2, 2, 'FD');
+  doc.roundedRect(16, y, 178, 58, 2, 2, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
@@ -207,17 +233,21 @@ export function exportCompanyReportPDF(params: {
   doc.text('Resumen Ejecutivo del Expediente', 22, y + 10);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
   doc.setTextColor(30, 41, 59);
-  doc.text(`Fecha de emisión del informe: ${new Date().toLocaleDateString('es-CO')}`, 22, y + 20);
-  doc.text(`Entrevistas registradas: ${interviews.length}`, 22, y + 27);
-  doc.text(`Periodos cuantitativos analizados: ${metrics.length > 0 ? metrics.map((m) => formatPeriodLabel(m.period)).join(', ') : 'Sin periodos cargados'}`, 22, y + 34);
-  doc.text(`Indicadores calculados: ${kpis.filter((k) => k.value !== null).length} de ${kpis.length}`, 22, y + 41);
-  doc.text(`Cumplimiento general empresarial: ${overall !== null ? `${overall}%` : 'Información insuficiente'}`, 22, y + 48);
+  doc.text(`Fecha de emisión del informe: ${new Date().toLocaleDateString('es-CO')}`, 22, y + 19);
+  doc.text(`Entrevistas generales: ${interviews.length}  ·  Trabajadores registrados: ${workers.length} (${workerInterviews.length} entrevistados)`, 22, y + 26);
+  doc.text(
+    `Periodos cuantitativos analizados: ${metrics.length > 0 ? metrics.map((m) => formatPeriodLabel(m.period)).join(', ') : 'Sin periodos cargados'}`,
+    22,
+    y + 33
+  );
+  doc.text(`Indicadores calculados: ${kpis.filter((k) => k.value !== null).length} de ${kpis.length}`, 22, y + 40);
+  doc.text(`Cumplimiento general empresarial: ${overall !== null ? `${overall}%` : 'Información insuficiente'}`, 22, y + 47);
 
   doc.setFontSize(9);
   doc.setTextColor(...SLATE);
-  doc.text('Diagnóstico Empresarial y Gestión Logística · Reporte Corporativo Integral', 16, 282);
+  doc.text('Diagnóstico Empresarial y Gestión Logística · Alimentos y Productos para Mascotas', 16, 282);
 
   // Page 2 onwards
   doc.addPage();
@@ -229,50 +259,107 @@ export function exportCompanyReportPDF(params: {
     doc,
     pageConfig.pdfIntroText?.trim()
       ? pageConfig.pdfIntroText
-      : `El presente informe consolida los resultados del diagnóstico empresarial y evaluación de procesos logísticos aplicado a ${company.name} (sector ${company.sector}). La evaluación integra información cualitativa recolectada en entrevista estructurada y datos cuantitativos operativos y financieros, con el propósito de detectar brechas, calcular indicadores de gestión y formular acciones concretas de mejoramiento.`,
+      : `El presente informe consolida los resultados del diagnóstico empresarial, estructura organizacional, entrevistas individuales por trabajador y evaluación de procesos logísticos aplicado a ${company.name} (sector ${company.sector}). La evaluación integra trazabilidad por lotes, método FEFO, control de vencimientos, preparación de pedidos e indicadores cuantitativos reales.`,
     y
   );
 
   // 3. OBJETIVOS DEL DIAGNÓSTICO
   y = addSectionHeading(doc, '3. Objetivos del Diagnóstico', y + 2);
-  y = addBulletList(doc, [
-    'Conocer el funcionamiento administrativo, operativo y logístico actual de la organización.',
-    'Identificar cuellos de botella, riesgos operativos, sobrecostos y oportunidades de mejora en la cadena logística.',
-    'Calcular automáticamente los indicadores clave de desempeño (KPI) por área y compararlos frente a metas establecidas.',
-    'Construir la matriz DOFA y un plan de mejoramiento accionable con responsables, metas y cronograma.',
-  ], y);
+  y = addBulletList(
+    doc,
+    [
+      'Documentar la estructura organizacional, cargos existentes y funciones reales de cada trabajador.',
+      'Evaluar procesos críticos: compras, recepción, almacenamiento FEFO, preparación de pedidos, distribución y servicio al cliente.',
+      'Calcular indicadores clave de desempeño (KPI) con fórmulas transparentes sin inventar datos faltantes.',
+      'Consolidar problemas detallados, matriz DOFA y plan de mejoramiento con responsables y metas.',
+    ],
+    y
+  );
 
-  // 4. INFORMACIÓN GENERAL
-  y = addSectionHeading(doc, '4. Información General de la Empresa', y + 2);
+  // 4. INFORMACIÓN GENERAL Y ESTRUCTURA ORGANIZACIONAL
+  y = addSectionHeading(doc, '4. Información General, Representante Legal y Trabajador Entrevistado', y + 2);
   autoTable(doc, {
     startY: y,
     theme: 'grid',
-    headStyles: { fillColor: NAVY, textColor: 255, fontSize: 9 },
-    bodyStyles: { fontSize: 8.5, textColor: [30, 41, 59] },
+    headStyles: { fillColor: NAVY, textColor: 255, fontSize: 8.5 },
+    bodyStyles: { fontSize: 8, textColor: [30, 41, 59] },
     head: [['Campo', 'Detalle', 'Campo', 'Detalle']],
     body: [
       ['Razón Social', company.name, 'NIT', company.nit || '—'],
       ['Sector', company.sector, 'Actividad Económica', company.economicActivity || '—'],
       ['Dirección', company.address || '—', 'Ciudad', company.city || '—'],
-      ['Representante', company.representativeName || '—', 'Cargo Entrevistado', company.intervieweeRole || '—'],
-      ['Empleados', String(company.employeesCount ?? '—'), 'Tiempo Operando', company.yearsOperating || '—'],
-      ['Teléfono', company.phone || '—', 'Correo Electrónico', company.email || '—'],
+      ['Antigüedad Empresa', company.yearsOperating || '—', 'Número Empleados', String(company.employeesCount ?? '—')],
+      ['Representante Legal', company.representativeName || '—', 'Cargo Rep. Legal', company.representativeRole || 'Propietario / Rep. Legal'],
+      ['Tel. / Correo Rep.', `${company.representativePhone || company.phone || '—'} · ${company.representativeEmail || company.email || '—'}`, 'Organigrama', company.hasOrgChart || '—'],
+      ['Entrevistado Principal', company.intervieweeName || '—', 'Cargo Entrevistado', company.intervieweeRole || '—'],
+      ['Área Entrevistado', company.intervieweeArea || '—', 'Antigüedad Trabajador', company.intervieweeTenure || '—'],
     ],
   });
   y = getLastTableY(doc, y + 40);
 
-  // 5. METODOLOGÍA DE ENTREVISTA
-  y = addSectionHeading(doc, '5. Metodología de Entrevista', y);
-  y = addParagraph(
-    doc,
-    'Se aplicó un instrumento estructurado dividido en 10 secciones temáticas (Secciones A a J), combinando preguntas abiertas, selección única, selección múltiple y datos cuantitativos de los últimos meses evaluados. Cada hallazgo fue contrastado con la evidencia numérica disponible sin supuestos ni datos fabricados.'
-    , y
-  );
+  if (company.existingPositions && company.existingPositions.length > 0) {
+    y = addParagraph(doc, `Cargos del Organigrama (${company.orgChartDescription || 'Estructura declarada'}):`, y, 9.5);
+    autoTable(doc, {
+      startY: y,
+      theme: 'striped',
+      headStyles: { fillColor: NAVY, textColor: 255, fontSize: 8 },
+      bodyStyles: { fontSize: 8, textColor: [30, 41, 59] },
+      head: [['Cargo', 'Área', 'Trabajadores', 'Reporta a']],
+      body: company.existingPositions.map((p) => [
+        p.positionTitle,
+        p.area,
+        String(p.employeesInRole),
+        p.reportsTo || '—',
+      ]),
+    });
+    y = getLastTableY(doc, y + 25);
+  }
 
-  // 6. RESULTADOS DE LA ENTREVISTA
-  y = addSectionHeading(doc, '6. Resultados de la Entrevista', y + 2);
+  // 5. ENTREVISTAS INDIVIDUALES DE TRABAJADORES
+  y = addSectionHeading(doc, '5. Entrevistas Individuales por Trabajador', y);
+  if (workers.length === 0) {
+    y = addParagraph(doc, 'No se registraron trabajadores en el módulo de entrevista individual.', y);
+  } else {
+    autoTable(doc, {
+      startY: y,
+      theme: 'grid',
+      headStyles: { fillColor: NAVY, textColor: 255, fontSize: 8 },
+      bodyStyles: { fontSize: 7.5, textColor: [30, 41, 59] },
+      head: [['Trabajador', 'Cargo', 'Área', 'Antigüedad', 'Funciones y Dificultades Reportadas']],
+      body: workers.map((w) => {
+        const wi = workerInterviews.find((item) => item.workerId === w.id);
+        const w4 = wi?.answers['W4'] ? `Funciones: ${String(wi.answers['W4'])}` : 'Sin funciones registradas';
+        const w11 = wi?.answers['W11'] ? ` · Dificultades: ${String(wi.answers['W11'])}` : '';
+        return [w.fullName, w.role, w.area, w.tenure || '—', `${w4}${w11}`];
+      }),
+    });
+    y = getLastTableY(doc, y + 30);
+
+    for (const wi of workerInterviews) {
+      const w = workers.find((item) => item.id === wi.workerId);
+      if (!w) continue;
+      y = addParagraph(doc, `Detalle Entrevista: ${w.fullName} (${w.role} · ${w.area})`, y, 9.5);
+      autoTable(doc, {
+        startY: y,
+        theme: 'striped',
+        headStyles: { fillColor: GREEN, textColor: 255, fontSize: 7.5 },
+        bodyStyles: { fontSize: 7.5, textColor: [30, 41, 59] },
+        columnStyles: { 0: { cellWidth: 75 }, 1: { cellWidth: 107 } },
+        head: [['Pregunta Individual', 'Respuesta']],
+        body: WORKER_INTERVIEW_QUESTIONS.map((q) => {
+          const raw = wi.answers[q.id];
+          const val = Array.isArray(raw) ? raw.join(', ') : raw ? String(raw) : 'Sin respuesta';
+          return [`W${q.number}. ${q.label}`, val];
+        }),
+      });
+      y = getLastTableY(doc, y + 30);
+    }
+  }
+
+  // 6. RESULTADOS DE LA ENTREVISTA LOGÍSTICA GENERAL
+  y = addSectionHeading(doc, '6. Resultados de la Entrevista Logística (Secciones A - J)', y + 2);
   if (!latestInterview) {
-    y = addParagraph(doc, 'No se ha registrado ninguna entrevista para esta empresa.', y);
+    y = addParagraph(doc, 'No se ha registrado ninguna entrevista logística general para esta empresa.', y);
   } else {
     y = addParagraph(
       doc,
@@ -282,10 +369,6 @@ export function exportCompanyReportPDF(params: {
     );
     const interviewRows: string[][] = [];
     for (const sec of customSections) {
-      if (sec.optional && !latestInterview.hasProductionProcess) {
-        interviewRows.push([sec.title, 'No aplica']);
-        continue;
-      }
       for (const q of sec.questions) {
         const raw = latestInterview.answers[q.id];
         const formatted = Array.isArray(raw) ? raw.join(', ') : raw !== undefined && raw !== '' ? String(raw) : 'Sin respuesta';
@@ -321,14 +404,27 @@ export function exportCompanyReportPDF(params: {
   });
   y = getLastTableY(doc, y + 30);
 
-  // 8. DIAGNÓSTICO EMPRESARIAL
-  y = addSectionHeading(doc, '8. Diagnóstico Empresarial', y);
-  y = addParagraph(doc, 'Procesos Críticos Identificados:', y, 10);
-  y = addBulletList(doc, diagnostic.criticalProcesses, y, 'No se detectaron procesos críticos con la información actual.');
-  y = addParagraph(doc, 'Problemas Logísticos:', y + 1, 10);
-  y = addBulletList(doc, diagnostic.logisticsProblems, y, 'Sin problemas logísticos críticos reportados.');
-  y = addParagraph(doc, 'Riesgos Operativos:', y + 1, 10);
-  y = addBulletList(doc, diagnostic.operationalRisks, y, 'Sin riesgos operativos graves detectados.');
+  // 8. DIAGNÓSTICO EMPRESARIAL Y PROBLEMAS DETALLADOS
+  y = addSectionHeading(doc, '8. Diagnóstico Detallado de Problemas', y);
+  if (diagnostic.detailedProblems.length > 0) {
+    autoTable(doc, {
+      startY: y,
+      theme: 'grid',
+      headStyles: { fillColor: NAVY, textColor: 255, fontSize: 7.5 },
+      bodyStyles: { fontSize: 7, textColor: [30, 41, 59] },
+      head: [['Área / Proceso', 'Descripción del Problema', 'Frec. / Gravedad', 'Causas y Consecuencias', 'Recomendación']],
+      body: diagnostic.detailedProblems.map((p) => [
+        `${p.affectedArea}\n(${p.affectedProcess})`,
+        p.description,
+        `${p.frequency}\n${p.severity}`,
+        `Causas: ${p.possibleCauses}\nConsecuencias: ${p.consequences}`,
+        `${p.recommendations}\n[Evidencia: ${p.evidence}]`,
+      ]),
+    });
+    y = getLastTableY(doc, y + 40);
+  } else {
+    y = addBulletList(doc, diagnostic.logisticsProblems, y, 'Sin problemas críticos detallados.');
+  }
 
   // 9. INDICADORES CON FÓRMULAS Y RESULTADOS
   y = addSectionHeading(doc, '9. Indicadores de Gestión (KPIs) con Fórmulas y Resultados', y + 2);
@@ -384,10 +480,12 @@ export function exportCompanyReportPDF(params: {
     headStyles: { fillColor: NAVY, textColor: 255, fontSize: 9 },
     bodyStyles: { fontSize: 8, textColor: [30, 41, 59], valign: 'top' },
     head: [['Fortalezas (Interno Positivo)', 'Debilidades (Interno Negativo)']],
-    body: [[
-      diagnostic.swot.fortalezas.map((x) => `• ${x}`).join('\n') || 'Sin fortalezas registradas.',
-      diagnostic.swot.debilidades.map((x) => `• ${x}`).join('\n') || 'Sin debilidades registradas.',
-    ]],
+    body: [
+      [
+        diagnostic.swot.fortalezas.map((x) => `• ${x}`).join('\n') || 'Sin fortalezas registradas.',
+        diagnostic.swot.debilidades.map((x) => `• ${x}`).join('\n') || 'Sin debilidades registradas.',
+      ],
+    ],
   });
   y = getLastTableY(doc, y + 25);
   autoTable(doc, {
@@ -396,10 +494,12 @@ export function exportCompanyReportPDF(params: {
     headStyles: { fillColor: GREEN, textColor: 255, fontSize: 9 },
     bodyStyles: { fontSize: 8, textColor: [30, 41, 59], valign: 'top' },
     head: [['Oportunidades (Externo / Mejora)', 'Amenazas (Riesgos del Entorno)']],
-    body: [[
-      diagnostic.swot.oportunidades.map((x) => `• ${x}`).join('\n') || 'Sin oportunidades registradas.',
-      diagnostic.swot.amenazas.map((x) => `• ${x}`).join('\n') || 'Sin amenazas registradas.',
-    ]],
+    body: [
+      [
+        diagnostic.swot.oportunidades.map((x) => `• ${x}`).join('\n') || 'Sin oportunidades registradas.',
+        diagnostic.swot.amenazas.map((x) => `• ${x}`).join('\n') || 'Sin amenazas registradas.',
+      ],
+    ],
   });
   y = getLastTableY(doc, y + 25);
 
@@ -413,7 +513,12 @@ export function exportCompanyReportPDF(params: {
     const kpiRecs = kpis
       .filter((k) => k.status === 'critico' || k.status === 'alerta')
       .map((k) => `[${k.area} - ${k.name}] ${k.recommendation}`);
-    y = addBulletList(doc, kpiRecs, y, 'Todos los indicadores calculados cumplen con sus metas establecidas o faltan datos numéricos.');
+    y = addBulletList(
+      doc,
+      kpiRecs,
+      y,
+      'Todos los indicadores calculados cumplen con sus metas establecidas o faltan datos numéricos.'
+    );
   }
 
   // 14. PLAN DE MEJORAMIENTO
@@ -426,7 +531,7 @@ export function exportCompanyReportPDF(params: {
       theme: 'grid',
       headStyles: { fillColor: NAVY, textColor: 255, fontSize: 7.5 },
       bodyStyles: { fontSize: 7.5, textColor: [30, 41, 59] },
-      head: [['Problema', 'Área', 'Acción de Mejora', 'KPI / Meta', 'Responsable', 'Plazo', 'Estado']],
+      head: [['Problema', 'Área', 'Acción Correctiva', 'KPI / Meta', 'Responsable', 'Plazo', 'Estado']],
       body: plans.map((p) => [
         p.problemIdentified,
         p.responsibleArea,
@@ -447,7 +552,7 @@ export function exportCompanyReportPDF(params: {
   } else {
     addParagraph(
       doc,
-      `El diagnóstico aplicado a ${company.name} permite visualizar con objetividad la situación de sus procesos logísticos y administrativos. Con un cumplimiento general del ${overall !== null ? `${overall}%` : 'pendiente por falta de datos numéricos'}, se recomienda ejecutar prioritariamente las acciones del Plan de Mejoramiento enfocadas en los procesos críticos y mantener la medición mensual de indicadores para validar el impacto de cada intervención.`,
+      `El diagnóstico aplicado a ${company.name} permite visualizar con objetividad su estructura organizacional, funciones por trabajador y procesos logísticos. Con un cumplimiento general del ${overall !== null ? `${overall}%` : 'pendiente por falta de datos numéricos'}, se recomienda ejecutar prioritariamente las acciones del Plan de Mejoramiento enfocadas en trazabilidad FEFO, preparación de pedidos y entregas a tiempo.`,
       y
     );
   }
@@ -458,12 +563,14 @@ export function exportCompanyReportPDF(params: {
 
 export function exportConsolidatedReportPDF(params: {
   companies: Company[];
+  workers?: Worker[];
   interviews: Interview[];
+  workerInterviews?: WorkerInterview[];
   metrics: MonthlyMetrics[];
   plans: ImprovementAction[];
   customTargets: Record<string, Record<string, number>>;
 }): void {
-  const { companies, interviews, metrics, plans, customTargets } = params;
+  const { companies, workers = [], interviews, workerInterviews = [], metrics, plans, customTargets } = params;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
   doc.setFillColor(...NAVY);
@@ -485,6 +592,8 @@ export function exportConsolidatedReportPDF(params: {
 
   const summaryRows = companies.map((c) => {
     const cInterviews = interviews.filter((i) => i.companyId === c.id);
+    const cWorkers = workers.filter((w) => w.companyId === c.id);
+    const cWI = workerInterviews.filter((wi) => wi.companyId === c.id);
     const cMetrics = metrics.filter((m) => m.companyId === c.id);
     const cKpis = calculateKPIs(cMetrics, customTargets[c.id]);
     const compliance = getOverallCompliance(cKpis);
@@ -493,7 +602,7 @@ export function exportConsolidatedReportPDF(params: {
     return [
       c.name,
       c.sector,
-      c.city || '—',
+      `${cWorkers.length} (${cWI.length} ent.)`,
       String(cInterviews.length),
       compliance !== null ? `${compliance}%` : 'Sin datos',
       String(critCount),
@@ -505,8 +614,8 @@ export function exportConsolidatedReportPDF(params: {
     startY: y,
     theme: 'grid',
     headStyles: { fillColor: NAVY, textColor: 255, fontSize: 8 },
-    bodyStyles: { fontSize: 8, textColor: [30, 41, 59] },
-    head: [['Empresa', 'Sector', 'Ciudad', 'Entrevistas', 'Cumplimiento', 'KPIs Críticos', 'Acciones Plan']],
+    bodyStyles: { fontSize: 7.5, textColor: [30, 41, 59] },
+    head: [['Empresa', 'Sector', 'Trabajadores', 'Entrevistas', 'Cumplimiento', 'KPIs Críticos', 'Acciones Plan']],
     body: summaryRows,
   });
 
@@ -517,7 +626,7 @@ export function exportConsolidatedReportPDF(params: {
     theme: 'striped',
     headStyles: { fillColor: GREEN, textColor: 255, fontSize: 8 },
     bodyStyles: { fontSize: 7.5, textColor: [30, 41, 59] },
-    head: [['Empresa', 'Área', 'Acción de Mejora', 'Meta', 'Responsable', 'Estado']],
+    head: [['Empresa', 'Área', 'Acción Correctiva', 'Meta', 'Responsable', 'Estado']],
     body: plans.map((p) => {
       const compName = companies.find((c) => c.id === p.companyId)?.name ?? p.companyId;
       return [compName, p.responsibleArea, p.improvementAction, p.target, p.responsiblePerson, p.status];

@@ -22,6 +22,7 @@ import {
   Target,
   Trash2,
   Truck,
+  UserCheck,
   Users,
   X,
 } from 'lucide-react';
@@ -48,6 +49,7 @@ export const SIDEBAR_ICON_MAP: Record<SidebarIconName, React.ComponentType<{ cla
   Target,
   Package,
   Truck,
+  UserCheck,
   Users,
   CheckSquare,
 };

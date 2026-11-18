@@ -12,9 +12,13 @@ const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'workspace.json');
 
 interface WorkspaceStore {
+  schemaVersion?: number;
   companies: unknown[];
+  workers: unknown[];
   interviews: unknown[];
+  workerInterviews: unknown[];
   metrics: unknown[];
+  diagnosticProblems: unknown[];
   improvementPlans: unknown[];
   aiReports: unknown[];
   customTargets: Record<string, Record<string, number>>;
@@ -24,9 +28,13 @@ interface WorkspaceStore {
 }
 
 const DEFAULT_STORE: WorkspaceStore = {
+  schemaVersion: 2,
   companies: [],
+  workers: [],
   interviews: [],
+  workerInterviews: [],
   metrics: [],
+  diagnosticProblems: [],
   improvementPlans: [],
   aiReports: [],
   customTargets: {},
@@ -44,9 +52,13 @@ function ensureDb(): WorkspaceStore {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<WorkspaceStore>;
     return {
+      schemaVersion: typeof parsed.schemaVersion === 'number' ? parsed.schemaVersion : 1,
       companies: Array.isArray(parsed.companies) ? parsed.companies : [],
+      workers: Array.isArray(parsed.workers) ? parsed.workers : [],
       interviews: Array.isArray(parsed.interviews) ? parsed.interviews : [],
+      workerInterviews: Array.isArray(parsed.workerInterviews) ? parsed.workerInterviews : [],
       metrics: Array.isArray(parsed.metrics) ? parsed.metrics : [],
+      diagnosticProblems: Array.isArray(parsed.diagnosticProblems) ? parsed.diagnosticProblems : [],
       improvementPlans: Array.isArray(parsed.improvementPlans) ? parsed.improvementPlans : [],
       aiReports: Array.isArray(parsed.aiReports) ? parsed.aiReports : [],
       customTargets: parsed.customTargets && typeof parsed.customTargets === 'object' ? parsed.customTargets : {},
@@ -71,7 +83,7 @@ function saveDb(store: WorkspaceStore): void {
 }
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 // Workspace state endpoints
 app.get('/api/workspace', (_req, res) => {
@@ -83,9 +95,13 @@ app.put('/api/workspace', (req, res) => {
   try {
     const body = req.body as Partial<WorkspaceStore>;
     const nextStore: WorkspaceStore = {
+      schemaVersion: typeof body.schemaVersion === 'number' ? body.schemaVersion : 2,
       companies: Array.isArray(body.companies) ? body.companies : [],
+      workers: Array.isArray(body.workers) ? body.workers : [],
       interviews: Array.isArray(body.interviews) ? body.interviews : [],
+      workerInterviews: Array.isArray(body.workerInterviews) ? body.workerInterviews : [],
       metrics: Array.isArray(body.metrics) ? body.metrics : [],
+      diagnosticProblems: Array.isArray(body.diagnosticProblems) ? body.diagnosticProblems : [],
       improvementPlans: Array.isArray(body.improvementPlans) ? body.improvementPlans : [],
       aiReports: Array.isArray(body.aiReports) ? body.aiReports : [],
       customTargets: body.customTargets && typeof body.customTargets === 'object' ? body.customTargets : {},
@@ -116,9 +132,11 @@ app.post('/api/ai/analyze', async (req, res) => {
   }
 
   try {
-    const { company, interview, kpis, diagnostic, periodLabel } = req.body as {
+    const { company, interview, workers, workerInterviews, kpis, diagnostic, periodLabel } = req.body as {
       company: Record<string, unknown>;
       interview: Record<string, unknown> | null;
+      workers?: Array<Record<string, unknown>>;
+      workerInterviews?: Array<Record<string, unknown>>;
       kpis: Array<Record<string, unknown>>;
       diagnostic: Record<string, unknown>;
       periodLabel: string;
@@ -142,15 +160,17 @@ app.post('/api/ai/analyze', async (req, res) => {
       {
         empresa: company,
         periodoAnalizado: periodLabel,
-        entrevista: interview
+        trabajadoresRegistrados: workers ?? [],
+        entrevistasIndividuales: workerInterviews ?? [],
+        entrevistaLogisticaGeneral: interview
           ? {
               titulo: interview.title,
               fecha: interview.interviewDate,
               estado: interview.status,
-              tieneProduccion: interview.hasProductionProcess,
+              incluyePreparacionPedidos: interview.hasProductionProcess,
               respuestas: interview.answers,
             }
-          : 'Sin entrevista registrada aún.',
+          : 'Sin entrevista general registrada aún.',
         indicadoresCalculados: kpis.map((k) => ({
           nombre: k.name,
           area: k.area,
@@ -168,10 +188,10 @@ app.post('/api/ai/analyze', async (req, res) => {
 
     const response = await ai.models.generateContent({
       model: 'gemini-4-hydrogen',
-      contents: `Analiza únicamente los datos reales proporcionados de la empresa y genera un informe estructurado de recomendaciones logísticas y empresariales en español.\n\nDATOS DE LA EMPRESA:\n${promptContext}`,
+      contents: `Analiza únicamente los datos reales proporcionados de la empresa (dedicada a comercialización de alimentos y productos para mascotas) y genera un informe estructurado de recomendaciones logísticas, organizacionales y empresariales en español.\n\nDATOS DE LA EMPRESA:\n${promptContext}`,
       config: {
         systemInstruction:
-          'Eres un consultor senior en administración de empresas, logística, cadena de suministro e indicadores de gestión (KPI). REGLA ESTRICTA: Basa todas tus interpretaciones, problemas, metas y recomendaciones exclusivamente en los datos, respuestas de entrevista e indicadores proporcionados. No inventes cifras ni asumas hechos que no estén en el contexto. Si un indicador dice "Información insuficiente para calcular", indícalo como una brecha de medición de datos.',
+          'Eres un consultor senior en administración de empresas, logística de alimentos y productos para mascotas, gestión de inventarios FEFO/lotes, preparación de pedidos e indicadores de gestión (KPI). REGLA ESTRICTA: Basa todas tus interpretaciones, problemas, metas y recomendaciones exclusivamente en los datos, respuestas de entrevistas (empresa y trabajadores) e indicadores proporcionados. No inventes cifras ni asumas hechos que no estén en el contexto. Si un indicador dice "Información insuficiente para calcular", indícalo como una brecha de medición de datos.',
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -192,12 +212,12 @@ app.post('/api/ai/analyze', async (req, res) => {
             criticalProcesses: {
               type: Type.ARRAY,
               items: { type: Type.STRING },
-              description: 'Procesos logísticos o administrativos que requieren atención prioritaria.',
+              description: 'Procesos logísticos, organizacionales o puestos de trabajo que requieren atención prioritaria.',
             },
             logisticsStrategies: {
               type: Type.ARRAY,
               items: { type: Type.STRING },
-              description: 'Estrategias logísticas y soluciones prácticas recomendadas para este caso.',
+              description: 'Estrategias logísticas (FEFO, lotes, preparación de pedidos, almacenamiento, entregas) recomendadas.',
             },
             suggestedTargets: {
               type: Type.ARRAY,

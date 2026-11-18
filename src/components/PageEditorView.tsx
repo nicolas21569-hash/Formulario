@@ -32,6 +32,7 @@ const ALL_ICON_OPTIONS: Array<{ value: SidebarIconName; label: string }> = [
   ...CUSTOM_ICON_OPTIONS,
   { value: 'LayoutDashboard', label: 'Panel' },
   { value: 'Building2', label: 'Empresa' },
+  { value: 'UserCheck', label: 'Trabajadores' },
   { value: 'ClipboardCheck', label: 'Entrevista' },
   { value: 'FileSpreadsheet', label: 'Hoja de datos' },
   { value: 'Calculator', label: 'Indicadores' },

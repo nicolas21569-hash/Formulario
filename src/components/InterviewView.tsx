@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -40,8 +40,25 @@ const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   text: 'Texto corto',
   select: 'Selección única',
   multiselect: 'Selección múltiple',
+  yes_no_na: 'Sí / No / No aplica',
   number: 'Numérico',
 };
+
+function isQuestionVisible(q: InterviewQuestion, answers: Record<string, AnswerValue>): boolean {
+  if (!q.conditionalOn) return true;
+  const dep = answers[q.conditionalOn.questionId];
+  const depStr = Array.isArray(dep) ? dep.join(',') : String(dep ?? '');
+  if (q.conditionalOn.equals !== undefined) {
+    const targets = Array.isArray(q.conditionalOn.equals)
+      ? q.conditionalOn.equals
+      : [q.conditionalOn.equals];
+    return targets.includes(depStr);
+  }
+  if (q.conditionalOn.notEquals !== undefined) {
+    return depStr !== q.conditionalOn.notEquals;
+  }
+  return true;
+}
 
 export const InterviewView: React.FC<InterviewViewProps> = ({
   company,
@@ -57,6 +74,8 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
   const [sectionIdx, setSectionIdx] = useState(0);
   const [draft, setDraft] = useState<Interview | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const dirtyRef = useRef(false);
 
   // Local editable copy of sections while in question-editor mode
   const [editableSections, setEditableSections] = useState<InterviewSection[]>(sections);
@@ -99,7 +118,7 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
       title: `Entrevista Diagnóstico #${interviews.length + 1}`,
       interviewerName: '',
       interviewDate: now.slice(0, 10),
-      hasProductionProcess: company.sector === 'Industrial' || company.sector === 'Restaurante',
+      hasProductionProcess: true,
       completedSections: [],
       answers: {},
       status: 'borrador',
@@ -125,6 +144,20 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
   const safeSectionIdx = Math.min(sectionIdx, Math.max(0, activeSectionsList.length - 1));
   const currentSection = activeSectionsList[safeSectionIdx];
 
+  useEffect(() => {
+    if (!draft || !dirtyRef.current) return;
+    setAutoSaveState('saving');
+    const timer = setTimeout(() => {
+      onSaveInterview({
+        ...draft,
+        updatedAt: new Date().toISOString(),
+      });
+      dirtyRef.current = false;
+      setAutoSaveState('saved');
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [draft]);
+
   const progressStats = useMemo(() => {
     if (!draft) return { answered: 0, total: 0, pct: 0 };
     let answered = 0;
@@ -132,6 +165,7 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
     for (const sec of sections) {
       if (sec.optional && !draft.hasProductionProcess) continue;
       for (const q of sec.questions) {
+        if (!isQuestionVisible(q, draft.answers)) continue;
         total++;
         const v = draft.answers[q.id];
         if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== '') {
@@ -145,6 +179,7 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
 
   const updateAnswer = (qId: string, val: AnswerValue) => {
     if (!draft) return;
+    dirtyRef.current = true;
     setDraft({
       ...draft,
       answers: {
@@ -246,6 +281,8 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
           (!updatedQ.options || updatedQ.options.length === 0)
         ) {
           updatedQ.options = ['Opción 1', 'Opción 2'];
+        } else if (updatedQ.type === 'yes_no_na') {
+          updatedQ.options = ['Sí', 'No', 'No aplica'];
         }
         return updatedQ;
       });
@@ -814,9 +851,18 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
                   </h3>
                   <p className="text-xs text-slate-600 mt-0.5">{currentSection.subtitle}</p>
                 </div>
-                <span className="text-xs font-medium text-slate-500 whitespace-nowrap">
-                  Estado: {draft.status === 'completada' ? 'Completada' : 'Borrador en curso'}
-                </span>
+                <div className="text-right">
+                  <span className="text-xs font-medium text-slate-500 whitespace-nowrap block">
+                    Estado: {draft.status === 'completada' ? 'Completada' : 'Borrador en curso'}
+                  </span>
+                  <span className="text-[11px] text-[#15803D]">
+                    {autoSaveState === 'saving'
+                      ? 'Autoguardando...'
+                      : autoSaveState === 'saved'
+                      ? 'Guardado automático'
+                      : ''}
+                  </span>
+                </div>
               </div>
 
               {currentSection.optional && (
@@ -847,100 +893,129 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
                 </div>
               ) : (
                 <div className="space-y-5">
-                  {currentSection.questions.map((q) => {
-                    const val = draft.answers[q.id];
-                    return (
-                      <div key={q.id} className="space-y-2 border-b border-slate-100 pb-5 last:border-b-0">
-                        <label className="block text-sm font-semibold text-slate-900">
-                          {q.number}. {q.label}
-                        </label>
+                  {currentSection.questions
+                    .filter((q) => isQuestionVisible(q, draft.answers))
+                    .map((q) => {
+                      const val = draft.answers[q.id];
+                      return (
+                        <div key={q.id} className="space-y-2 border-b border-slate-100 pb-5 last:border-b-0">
+                          <label className="block text-sm font-semibold text-slate-900">
+                            {q.number}. {q.label}
+                            {q.conditionalOn && (
+                              <span className="ml-2 text-[11px] font-normal text-[#15803D]">
+                                (Pregunta condicional)
+                              </span>
+                            )}
+                          </label>
 
-                        {q.type === 'textarea' && (
-                          <textarea
-                            rows={3}
-                            value={typeof val === 'string' ? val : ''}
-                            onChange={(e) => updateAnswer(q.id, e.target.value)}
-                            placeholder={q.placeholder}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-                          />
-                        )}
-
-                        {q.type === 'text' && (
-                          <input
-                            type="text"
-                            value={typeof val === 'string' ? val : ''}
-                            onChange={(e) => updateAnswer(q.id, e.target.value)}
-                            placeholder={q.placeholder}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
-                          />
-                        )}
-
-                        {q.type === 'number' && (
-                          <div className="flex items-center gap-2 max-w-xs">
-                            <input
-                              type="number"
-                              value={typeof val === 'number' ? val : ''}
-                              onChange={(e) =>
-                                updateAnswer(q.id, e.target.value === '' ? undefined : Number(e.target.value))
-                              }
+                          {q.type === 'textarea' && (
+                            <textarea
+                              rows={3}
+                              value={typeof val === 'string' ? val : ''}
+                              onChange={(e) => updateAnswer(q.id, e.target.value)}
                               placeholder={q.placeholder}
-                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono tabular-nums focus:border-[#0B1E3B] focus:outline-none"
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
                             />
-                            {q.unit && <span className="text-xs text-slate-500">{q.unit}</span>}
-                          </div>
-                        )}
+                          )}
 
-                        {q.type === 'select' && q.options && (
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            {q.options.map((opt) => {
-                              const selected = val === opt;
-                              return (
-                                <button
-                                  key={opt}
-                                  type="button"
-                                  onClick={() => updateAnswer(q.id, opt)}
-                                  className={`rounded-lg border px-3 py-2.5 text-left text-xs font-medium transition-colors cursor-pointer ${
-                                    selected
-                                      ? 'border-[#15803D] bg-emerald-50 text-[#0B1E3B]'
-                                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                                  }`}
-                                >
-                                  {opt}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
+                          {q.type === 'text' && (
+                            <input
+                              type="text"
+                              value={typeof val === 'string' ? val : ''}
+                              onChange={(e) => updateAnswer(q.id, e.target.value)}
+                              placeholder={q.placeholder}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0B1E3B] focus:outline-none"
+                            />
+                          )}
 
-                        {q.type === 'multiselect' && q.options && (
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            {q.options.map((opt) => {
-                              const list = Array.isArray(val) ? (val as string[]) : [];
-                              const checked = list.includes(opt);
-                              return (
-                                <label
-                                  key={opt}
-                                  className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-xs font-medium cursor-pointer transition-colors ${
-                                    checked
-                                      ? 'border-[#15803D] bg-emerald-50 text-[#0B1E3B]'
-                                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() => toggleMultiOption(q.id, opt)}
-                                    className="h-4 w-4 rounded border-slate-300 text-[#15803D]"
-                                  />
-                                  <span>{opt}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          {q.type === 'number' && (
+                            <div className="flex items-center gap-2 max-w-xs">
+                              <input
+                                type="number"
+                                value={typeof val === 'number' ? val : ''}
+                                onChange={(e) =>
+                                  updateAnswer(q.id, e.target.value === '' ? undefined : Number(e.target.value))
+                                }
+                                placeholder={q.placeholder}
+                                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono tabular-nums focus:border-[#0B1E3B] focus:outline-none"
+                              />
+                              {q.unit && <span className="text-xs text-slate-500">{q.unit}</span>}
+                            </div>
+                          )}
+
+                          {q.type === 'yes_no_na' && (
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                              {(q.options ?? ['Sí', 'No', 'No aplica']).map((opt) => {
+                                const selected = val === opt;
+                                return (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => updateAnswer(q.id, opt)}
+                                    className={`rounded-lg border px-3 py-2.5 text-left text-xs font-medium transition-colors cursor-pointer ${
+                                      selected
+                                        ? 'border-[#15803D] bg-emerald-50 text-[#0B1E3B]'
+                                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {q.type === 'select' && q.options && (
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {q.options.map((opt) => {
+                                const selected = val === opt;
+                                return (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => updateAnswer(q.id, opt)}
+                                    className={`rounded-lg border px-3 py-2.5 text-left text-xs font-medium transition-colors cursor-pointer ${
+                                      selected
+                                        ? 'border-[#15803D] bg-emerald-50 text-[#0B1E3B]'
+                                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {q.type === 'multiselect' && q.options && (
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {q.options.map((opt) => {
+                                const list = Array.isArray(val) ? (val as string[]) : [];
+                                const checked = list.includes(opt);
+                                return (
+                                  <label
+                                    key={opt}
+                                    className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-xs font-medium cursor-pointer transition-colors ${
+                                      checked
+                                        ? 'border-[#15803D] bg-emerald-50 text-[#0B1E3B]'
+                                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => toggleMultiOption(q.id, opt)}
+                                      className="h-4 w-4 rounded border-slate-300 text-[#15803D]"
+                                    />
+                                    <span>{opt}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               )}
 

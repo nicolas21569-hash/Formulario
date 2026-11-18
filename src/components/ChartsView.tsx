@@ -33,7 +33,7 @@ const AREAS: Array<'Todas' | KPIArea> = [
   'Todas',
   'Compras y Abastecimiento',
   'Almacenamiento e Inventarios',
-  'Producción',
+  'Preparación de Pedidos y Operaciones',
   'Transporte y Distribución',
   'Servicio al Cliente',
   'Financieros',
@@ -105,7 +105,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
         'Entregas a tiempo (%)': getVal('entregas_a_tiempo'),
         'Satisfacción (%)': getVal('nivel_satisfaccion'),
         'Exactitud inv. (%)': getVal('exactitud_inventario'),
-        'Margen utilidad (%)': getVal('margen_utilidad'),
+        'Vencidos (%)': getVal('porcentaje_vencidos'),
       };
     });
   }, [companyMetrics, company, customTargets]);
@@ -252,7 +252,7 @@ export const ChartsView: React.FC<ChartsViewProps> = ({
                   <Line type="monotone" dataKey="Entregas a tiempo (%)" stroke="#0B1E3B" strokeWidth={2.5} connectNulls />
                   <Line type="monotone" dataKey="Satisfacción (%)" stroke="#16A34A" strokeWidth={2.5} connectNulls />
                   <Line type="monotone" dataKey="Exactitud inv. (%)" stroke="#0284C7" strokeWidth={2} connectNulls />
-                  <Line type="monotone" dataKey="Margen utilidad (%)" stroke="#D97706" strokeWidth={2} connectNulls />
+                  <Line type="monotone" dataKey="Vencidos (%)" stroke="#DC2626" strokeWidth={2} connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>

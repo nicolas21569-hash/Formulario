@@ -11,9 +11,12 @@ import {
   AIAnalysisReport,
   AIPrioritizedAction,
   Company,
+  DiagnosticProblem,
   ImprovementAction,
   Interview,
   MonthlyMetrics,
+  Worker,
+  WorkerInterview,
 } from '../types/domain';
 import { generateDiagnosticSummary } from '../utils/diagnosticEngine';
 import { formatPeriodLabel, generateId } from '../utils/formatters';
@@ -22,9 +25,12 @@ import { NavSection } from './Sidebar';
 
 interface AIRecommendationsViewProps {
   company: Company | undefined;
+  workers: Worker[];
   interviews: Interview[];
+  workerInterviews: WorkerInterview[];
   metrics: MonthlyMetrics[];
   customTargets: Record<string, number>;
+  customProblems: DiagnosticProblem[];
   aiReport: AIAnalysisReport | undefined;
   onSaveAIReport: (report: AIAnalysisReport) => void;
   onAddImprovementAction: (action: ImprovementAction) => void;
@@ -33,9 +39,12 @@ interface AIRecommendationsViewProps {
 
 export const AIRecommendationsView: React.FC<AIRecommendationsViewProps> = ({
   company,
+  workers,
   interviews,
+  workerInterviews,
   metrics,
   customTargets,
+  customProblems,
   aiReport,
   onSaveAIReport,
   onAddImprovementAction,
@@ -51,8 +60,18 @@ export const AIRecommendationsView: React.FC<AIRecommendationsViewProps> = ({
   );
 
   const diagnostic = useMemo(
-    () => (company ? generateDiagnosticSummary(company.id, interviews, kpis) : null),
-    [company, interviews, kpis]
+    () =>
+      company
+        ? generateDiagnosticSummary(
+            company.id,
+            interviews,
+            kpis,
+            workerInterviews,
+            workers,
+            customProblems
+          )
+        : null,
+    [company, interviews, kpis, workerInterviews, workers, customProblems]
   );
 
   if (!company || !diagnostic) {
@@ -90,6 +109,8 @@ export const AIRecommendationsView: React.FC<AIRecommendationsViewProps> = ({
       const report = await requestAIAnalysis({
         company,
         interview: latestInterview,
+        workers,
+        workerInterviews,
         kpis,
         diagnostic,
         periodLabel,
@@ -167,7 +188,7 @@ export const AIRecommendationsView: React.FC<AIRecommendationsViewProps> = ({
             Consultoría Logística Asistida por IA
           </h3>
           <p className="mx-auto max-w-2xl text-sm text-slate-600">
-            Al ejecutar el análisis, el servidor enviará de forma segura las respuestas de la entrevista ({interviews.length} registradas), los resultados de los 21 indicadores ({kpis.filter((k) => k.value !== null).length} calculados) y el diagnóstico DOFA para generar estrategias logísticas, metas y acciones priorizadas por impacto.
+            Al ejecutar el análisis, el servidor enviará de forma segura la entrevista general ({interviews.length} registradas), las entrevistas individuales ({workerInterviews.length} de {workers.length} trabajadores), los resultados de los {kpis.length} indicadores ({kpis.filter((k) => k.value !== null).length} calculados) y el diagnóstico DOFA para generar estrategias logísticas, metas y acciones priorizadas.
           </p>
         </div>
       ) : (

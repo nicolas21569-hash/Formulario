@@ -13,6 +13,7 @@ import { PageEditorView } from './components/PageEditorView';
 import { ReportsView } from './components/ReportsView';
 import { NavSection, Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
+import { WorkersInterviewView } from './components/WorkersInterviewView';
 import {
   DEFAULT_PAGE_CONFIG,
   DEFAULT_SIDEBAR_TABS,
@@ -23,12 +24,15 @@ import {
   AIAnalysisReport,
   Company,
   CustomTabContent,
+  DiagnosticProblem,
   ImprovementAction,
   Interview,
   InterviewSection,
   MonthlyMetrics,
   PageConfig,
   SidebarTab,
+  Worker,
+  WorkerInterview,
   WorkspaceData,
 } from './types/domain';
 import { buildDemoDataset, DEMO_COMPANY_ID } from './utils/demoData';
@@ -90,14 +94,38 @@ export default function App() {
     [workspace.companies, selectedCompanyId]
   );
 
+  const companyWorkers = useMemo(
+    () =>
+      activeCompany
+        ? (workspace.workers ?? []).filter((w) => w.companyId === activeCompany.id)
+        : [],
+    [workspace.workers, activeCompany]
+  );
+
   const companyInterviews = useMemo(
     () => (activeCompany ? workspace.interviews.filter((i) => i.companyId === activeCompany.id) : []),
     [workspace.interviews, activeCompany]
   );
 
+  const companyWorkerInterviews = useMemo(
+    () =>
+      activeCompany
+        ? (workspace.workerInterviews ?? []).filter((wi) => wi.companyId === activeCompany.id)
+        : [],
+    [workspace.workerInterviews, activeCompany]
+  );
+
   const companyMetrics = useMemo(
     () => (activeCompany ? workspace.metrics.filter((m) => m.companyId === activeCompany.id) : []),
     [workspace.metrics, activeCompany]
+  );
+
+  const companyProblems = useMemo(
+    () =>
+      activeCompany
+        ? (workspace.diagnosticProblems ?? []).filter((p) => p.companyId === activeCompany.id)
+        : [],
+    [workspace.diagnosticProblems, activeCompany]
   );
 
   const companyPlans = useMemo(
@@ -138,12 +166,54 @@ export default function App() {
       return {
         ...prev,
         companies: remaining,
+        workers: (prev.workers ?? []).filter((w) => w.companyId !== id),
         interviews: prev.interviews.filter((i) => i.companyId !== id),
+        workerInterviews: (prev.workerInterviews ?? []).filter((wi) => wi.companyId !== id),
         metrics: prev.metrics.filter((m) => m.companyId !== id),
+        diagnosticProblems: (prev.diagnosticProblems ?? []).filter((p) => p.companyId !== id),
         improvementPlans: prev.improvementPlans.filter((p) => p.companyId !== id),
         aiReports: prev.aiReports.filter((r) => r.companyId !== id),
       };
     });
+  };
+
+  const handleSaveWorker = (worker: Worker) => {
+    updateWorkspace((prev) => {
+      const list = prev.workers ?? [];
+      const exists = list.some((w) => w.id === worker.id);
+      return {
+        ...prev,
+        workers: exists ? list.map((w) => (w.id === worker.id ? worker : w)) : [worker, ...list],
+      };
+    });
+  };
+
+  const handleDeleteWorker = (id: string) => {
+    updateWorkspace((prev) => ({
+      ...prev,
+      workers: (prev.workers ?? []).filter((w) => w.id !== id),
+      workerInterviews: (prev.workerInterviews ?? []).filter((wi) => wi.workerId !== id),
+    }));
+  };
+
+  const handleSaveWorkerInterview = (interview: WorkerInterview) => {
+    updateWorkspace((prev) => {
+      const list = prev.workerInterviews ?? [];
+      const exists = list.some((wi) => wi.id === interview.id);
+      return {
+        ...prev,
+        workerInterviews: exists
+          ? list.map((wi) => (wi.id === interview.id ? interview : wi))
+          : [interview, ...list],
+      };
+    });
+  };
+
+  const handleDeleteWorkerInterview = (id: string) => {
+    updateWorkspace((prev) => ({
+      ...prev,
+      workerInterviews: (prev.workerInterviews ?? []).filter((wi) => wi.id !== id),
+    }));
   };
 
   const handleSaveInterview = (interview: Interview) => {
@@ -262,6 +332,26 @@ export default function App() {
     }));
   };
 
+  const handleSaveProblem = (problem: DiagnosticProblem) => {
+    updateWorkspace((prev) => {
+      const list = prev.diagnosticProblems ?? [];
+      const exists = list.some((p) => p.id === problem.id);
+      return {
+        ...prev,
+        diagnosticProblems: exists
+          ? list.map((p) => (p.id === problem.id ? problem : p))
+          : [problem, ...list],
+      };
+    });
+  };
+
+  const handleDeleteProblem = (id: string) => {
+    updateWorkspace((prev) => ({
+      ...prev,
+      diagnosticProblems: (prev.diagnosticProblems ?? []).filter((p) => p.id !== id),
+    }));
+  };
+
   const handleSaveAIReport = (report: AIAnalysisReport) => {
     updateWorkspace((prev) => ({
       ...prev,
@@ -292,14 +382,24 @@ export default function App() {
     const demo = buildDemoDataset();
     updateWorkspace((prev) => {
       const cleanCompanies = prev.companies.filter((c) => c.id !== DEMO_COMPANY_ID);
+      const cleanWorkers = (prev.workers ?? []).filter((w) => w.companyId !== DEMO_COMPANY_ID);
       const cleanInterviews = prev.interviews.filter((i) => i.companyId !== DEMO_COMPANY_ID);
+      const cleanWorkerInterviews = (prev.workerInterviews ?? []).filter(
+        (wi) => wi.companyId !== DEMO_COMPANY_ID
+      );
       const cleanMetrics = prev.metrics.filter((m) => m.companyId !== DEMO_COMPANY_ID);
+      const cleanProblems = (prev.diagnosticProblems ?? []).filter(
+        (p) => p.companyId !== DEMO_COMPANY_ID
+      );
       const cleanPlans = prev.improvementPlans.filter((p) => p.companyId !== DEMO_COMPANY_ID);
       return {
         ...prev,
         companies: [demo.company, ...cleanCompanies],
+        workers: [...demo.workers, ...cleanWorkers],
         interviews: [demo.interview, ...cleanInterviews],
+        workerInterviews: [...demo.workerInterviews, ...cleanWorkerInterviews],
         metrics: [...demo.metrics, ...cleanMetrics],
+        diagnosticProblems: [...demo.diagnosticProblems, ...cleanProblems],
         improvementPlans: [...demo.plans, ...cleanPlans],
       };
     });
@@ -397,6 +497,19 @@ export default function App() {
                 />
               )}
 
+              {activeSection === 'workers' && (
+                <WorkersInterviewView
+                  company={activeCompany}
+                  workers={companyWorkers}
+                  workerInterviews={companyWorkerInterviews}
+                  onSaveWorker={handleSaveWorker}
+                  onDeleteWorker={handleDeleteWorker}
+                  onSaveWorkerInterview={handleSaveWorkerInterview}
+                  onDeleteWorkerInterview={handleDeleteWorkerInterview}
+                  onNavigate={setActiveSection}
+                />
+              )}
+
               {activeSection === 'interviews' && (
                 <InterviewView
                   company={activeCompany}
@@ -443,9 +556,14 @@ export default function App() {
               {activeSection === 'diagnostic' && (
                 <DiagnosticView
                   company={activeCompany}
+                  workers={companyWorkers}
                   interviews={companyInterviews}
+                  workerInterviews={companyWorkerInterviews}
                   metrics={companyMetrics}
                   customTargets={activeCompany ? workspace.customTargets[activeCompany.id] ?? {} : {}}
+                  customProblems={companyProblems}
+                  onSaveProblem={handleSaveProblem}
+                  onDeleteProblem={handleDeleteProblem}
                   onNavigate={setActiveSection}
                 />
               )}
@@ -453,9 +571,12 @@ export default function App() {
               {activeSection === 'ai' && (
                 <AIRecommendationsView
                   company={activeCompany}
+                  workers={companyWorkers}
                   interviews={companyInterviews}
+                  workerInterviews={companyWorkerInterviews}
                   metrics={companyMetrics}
                   customTargets={activeCompany ? workspace.customTargets[activeCompany.id] ?? {} : {}}
+                  customProblems={companyProblems}
                   aiReport={companyAIReport}
                   onSaveAIReport={handleSaveAIReport}
                   onAddImprovementAction={handleSavePlan}
@@ -466,6 +587,7 @@ export default function App() {
               {activeSection === 'plan' && (
                 <ImprovementPlanView
                   company={activeCompany}
+                  workers={companyWorkers}
                   plans={companyPlans}
                   onSavePlan={handleSavePlan}
                   onDeletePlan={handleDeletePlan}

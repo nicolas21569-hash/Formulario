@@ -6,7 +6,16 @@ export type BusinessSector =
   | 'Almacenamiento'
   | 'Servicios'
   | 'Distribución'
+  | 'Alimentos y Productos para Mascotas'
   | 'Otro';
+
+export interface OrgPosition {
+  id: string;
+  positionTitle: string;
+  area: string;
+  employeesInRole: number;
+  reportsTo?: string;
+}
 
 export interface Company {
   id: string;
@@ -16,13 +25,41 @@ export interface Company {
   sector: BusinessSector;
   address: string;
   city: string;
+  // Datos del representante legal o propietario
   representativeName: string;
+  representativeRole?: string;
+  representativeDocument?: string;
+  representativePhone?: string;
+  representativeEmail?: string;
+  // Datos del trabajador entrevistado principal
+  intervieweeName?: string;
   intervieweeRole: string;
+  intervieweeArea?: string;
+  intervieweeTenure?: string;
+  // Estructura y antigüedad
   employeesCount: number;
   yearsOperating: string;
+  hasOrgChart?: 'Sí' | 'No' | 'En construcción';
+  orgChartDescription?: string;
+  existingPositions?: OrgPosition[];
   phone: string;
   email: string;
   registrationDate: string;
+  isDemo?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Worker {
+  id: string;
+  companyId: string;
+  fullName: string;
+  role: string;
+  area: string;
+  tenure: string; // Antigüedad del trabajador
+  reportsTo?: string;
+  phone?: string;
+  email?: string;
   isDemo?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -49,6 +86,19 @@ export interface Interview {
   updatedAt: string;
 }
 
+export interface WorkerInterview {
+  id: string;
+  companyId: string;
+  workerId: string;
+  interviewerName: string;
+  interviewDate: string;
+  answers: InterviewAnswers;
+  status: 'borrador' | 'completada';
+  isDemo?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MonthlyMetrics {
   id: string;
   companyId: string;
@@ -65,8 +115,10 @@ export interface MonthlyMetrics {
   storageCosts: number | null;
   transportCosts: number | null;
   totalDeliveryHours: number | null;
-  unitsProduced: number | null;
-  defectiveUnits: number | null;
+  unitsProduced: number | null; // Pedidos / unidades preparadas en operaciones internas
+  defectiveUnits: number | null; // Pedidos / unidades con errores o dañados
+  totalPreparationHours?: number | null; // Horas totales en preparación de pedidos
+  expiredGoodsValue?: number | null; // Valor de productos vencidos
   returnsCount: number | null;
   claimsCount: number | null;
   customersServed: number | null;
@@ -86,7 +138,7 @@ export interface MonthlyMetrics {
 export type KPIArea =
   | 'Compras y Abastecimiento'
   | 'Almacenamiento e Inventarios'
-  | 'Producción'
+  | 'Preparación de Pedidos y Operaciones'
   | 'Transporte y Distribución'
   | 'Servicio al Cliente'
   | 'Financieros';
@@ -106,7 +158,7 @@ export interface KPIResult {
   target: number;
   formattedTarget: string;
   higherIsBetter: boolean;
-  complianceLevel: number | null; // percentage 0..100+
+  complianceLevel: number | null;
   status: KPIStatus;
   interpretation: string;
   recommendation: string;
@@ -120,11 +172,32 @@ export interface ProcessDiagnostic {
   evidence: string[];
 }
 
+export type ProblemSeverity = 'Crítico' | 'Alto' | 'Medio' | 'Bajo';
+export type ProblemFrequency = 'Diaria' | 'Semanal' | 'Mensual' | 'Ocasional';
+
+export interface DiagnosticProblem {
+  id: string;
+  companyId: string;
+  affectedArea: string;
+  affectedProcess: string;
+  description: string;
+  frequency: ProblemFrequency;
+  severity: ProblemSeverity;
+  consequences: string;
+  possibleCauses: string;
+  evidence: string;
+  recommendations: string;
+  isAutoDetected?: boolean;
+  isDemo?: boolean;
+  updatedAt: string;
+}
+
 export interface DiagnosticSummary {
   companyId: string;
   generatedAt: string;
   overallCompliance: number | null;
   processes: ProcessDiagnostic[];
+  detailedProblems: DiagnosticProblem[];
   strengths: string[];
   weaknesses: string[];
   criticalProcesses: string[];
@@ -186,7 +259,19 @@ export interface ImprovementAction {
   updatedAt: string;
 }
 
-export type QuestionType = 'text' | 'textarea' | 'select' | 'multiselect' | 'number';
+export type QuestionType =
+  | 'text'
+  | 'textarea'
+  | 'select'
+  | 'multiselect'
+  | 'number'
+  | 'yes_no_na';
+
+export interface QuestionCondition {
+  questionId: string;
+  equals?: string | string[];
+  notEquals?: string;
+}
 
 export interface InterviewQuestion {
   id: string;
@@ -196,6 +281,7 @@ export interface InterviewQuestion {
   placeholder?: string;
   options?: string[];
   unit?: string;
+  conditionalOn?: QuestionCondition;
 }
 
 export interface InterviewSection {
@@ -224,6 +310,7 @@ export type SidebarIconName =
   | 'Package'
   | 'Truck'
   | 'Users'
+  | 'UserCheck'
   | 'CheckSquare';
 
 export interface SidebarTab {
@@ -266,9 +353,13 @@ export interface PageConfig {
 }
 
 export interface WorkspaceData {
+  schemaVersion?: number;
   companies: Company[];
+  workers: Worker[];
   interviews: Interview[];
+  workerInterviews: WorkerInterview[];
   metrics: MonthlyMetrics[];
+  diagnosticProblems: DiagnosticProblem[];
   improvementPlans: ImprovementAction[];
   aiReports: AIAnalysisReport[];
   customTargets: Record<string, Record<string, number>>; // companyId -> kpiId -> target
